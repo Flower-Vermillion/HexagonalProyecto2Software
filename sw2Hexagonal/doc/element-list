@@ -1,0 +1,7 @@
+co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada
+co.edu.poli.sw2Hexagonal.aplicacion.puerto.salida
+co.edu.poli.sw2Hexagonal.aplicacion.servicio
+co.edu.poli.sw2Hexagonal.dominio.modelo
+co.edu.poli.sw2Hexagonal.infraestructura.persistencia
+co.edu.poli.sw2Hexagonal.infraestructura.ui
+co.edu.poli.sw2Hexagonal.vista

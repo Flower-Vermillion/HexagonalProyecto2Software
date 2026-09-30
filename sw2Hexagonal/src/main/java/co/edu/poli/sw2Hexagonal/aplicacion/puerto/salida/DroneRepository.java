@@ -8,7 +8,7 @@ import co.edu.poli.sw2Hexagonal.dominio.modelo.Drone;
  * Puerto de salida — repositorio de drones.
  * Define el contrato que la capa de aplicación usa para persistir y
  * consultar drones, sin conocer la tecnología de almacenamiento
- * (PostgreSQL, memoria, etc.). El adaptador de salida lo implementa.
+ * (MySQL, memoria, etc.). El adaptador de salida lo implementa.
  */
 public interface DroneRepository {
 

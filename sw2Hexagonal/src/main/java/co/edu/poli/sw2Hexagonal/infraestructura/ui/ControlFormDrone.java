@@ -8,14 +8,7 @@ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.EliminarDroneCasosDeUs
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerTodosDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerUnoDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.ModificarDroneCasosDeUso;
-import co.edu.poli.sw2Hexagonal.aplicacion.puerto.salida.DroneRepository;
-import co.edu.poli.sw2Hexagonal.aplicacion.servicio.CrearDroneServicio;
-import co.edu.poli.sw2Hexagonal.aplicacion.servicio.EliminarDroneServicio;
-import co.edu.poli.sw2Hexagonal.aplicacion.servicio.LeerTodosDroneServicio;
-import co.edu.poli.sw2Hexagonal.aplicacion.servicio.LeerUnoDroneServicio;
-import co.edu.poli.sw2Hexagonal.aplicacion.servicio.ModificarDroneServicio;
 import co.edu.poli.sw2Hexagonal.dominio.modelo.Drone;
-import co.edu.poli.sw2Hexagonal.infraestructura.persistencia.MySqlDroneRepository;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;

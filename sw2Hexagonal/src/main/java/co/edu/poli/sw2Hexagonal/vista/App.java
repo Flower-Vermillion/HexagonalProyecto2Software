@@ -20,20 +20,32 @@ import javafx.stage.Stage;
 
 /**
  * Punto de entrada de la aplicación JavaFX.
- *
- * Responsabilidad adicional en la arquitectura hexagonal:
- * es el único lugar del sistema que conoce todas las capas y
- * realiza la composición (wiring) manual de dependencias:
- *
+ * <p>
+ * Responsabilidad adicional en la arquitectura hexagonal: es el único lugar
+ * del sistema que conoce todas las capas y realiza la composición (wiring)
+ * manual de dependencias:
+ * </p>
+ * <pre>
  *   Adaptador de salida    →  Servicios de aplicación   →  Adaptador de entrada (UI)
  *   MySqlDroneRepository   →  CrearDroneServicio        →  ControlFormDrone
  *                          →  LeerUnoDroneServicio
  *                          →  LeerTodosDroneServicio
  *                          →  ModificarDroneServicio
  *                          →  EliminarDroneServicio
+ * </pre>
+ *
+ * @see ControlFormDrone
+ * @see MySqlDroneRepository
  */
 public class App extends Application {
 
+    /**
+     * Crea el adaptador de salida, los servicios de aplicación y la vista, los
+     * conecta entre sí y muestra la ventana principal.
+     *
+     * @param stage ventana principal proporcionada por JavaFX
+     * @throws Exception si no se puede cargar el archivo FXML de la vista
+     */
     @Override
     public void start(Stage stage) throws Exception {
 
@@ -64,6 +76,11 @@ public class App extends Application {
         stage.show();
     }
 
+    /**
+     * Método principal. Lanza la aplicación JavaFX.
+     *
+     * @param args argumentos de línea de comandos (no se utilizan)
+     */
     public static void main(String[] args) {
         launch();
     }
