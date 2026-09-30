@@ -1,1 +1,15 @@
-/target/
+# Variables de entorno / credenciales - NUNCA subir a GitHub
+.env
+
+# Maven
+target/
+
+# Eclipse
+.settings/
+.classpath
+.project
+bin/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
