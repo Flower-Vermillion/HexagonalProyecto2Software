@@ -4,48 +4,101 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<VBox spacing="12" xmlns:fx="http://javafx.com/fxml"
+<VBox xmlns:fx="http://javafx.com/fxml"
       fx:controller="co.edu.poli.sw2Hexagonal.infraestructura.ui.ControlFormDrone">
-  <padding>
-    <Insets top="16" right="16" bottom="16" left="16"/>
-  </padding>
 
-  <GridPane hgap="10" vgap="8">
-    <Label text="Id" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
-    <TextField fx:id="txtId" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+  <TabPane tabClosingPolicy="UNAVAILABLE">
 
-    <Label text="Serial" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
-    <TextField fx:id="txtSerial" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+    <!-- ===================== Pestaña 1: CRUD de drones ===================== -->
+    <Tab text="Drones">
+      <VBox spacing="12">
+        <padding>
+          <Insets top="16" right="16" bottom="16" left="16"/>
+        </padding>
 
-    <Label text="Modelo" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
-    <TextField fx:id="txtModelo" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+        <GridPane hgap="10" vgap="8">
+          <Label text="Id" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+          <TextField fx:id="txtId" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
 
-    <Label text="Fabricante" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
-    <TextField fx:id="txtFabricante" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+          <Label text="Serial" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+          <TextField fx:id="txtSerial" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
 
-    <Label text="Peso" GridPane.rowIndex="4" GridPane.columnIndex="0"/>
-    <TextField fx:id="txtPeso" GridPane.rowIndex="4" GridPane.columnIndex="1"/>
+          <Label text="Modelo" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+          <TextField fx:id="txtModelo" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
 
-    <Label text="Tipo" GridPane.rowIndex="5" GridPane.columnIndex="0"/>
-    <ComboBox fx:id="cmbTipo" prefWidth="200" GridPane.rowIndex="5" GridPane.columnIndex="1"/>
-  </GridPane>
+          <Label text="Fabricante" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+          <TextField fx:id="txtFabricante" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
 
-  <HBox spacing="8">
-    <Button text="Crear" onAction="#onCrear"/>
-    <Button text="Buscar por id" onAction="#onBuscar"/>
-    <Button text="Modificar" onAction="#onModificar"/>
-    <Button text="Eliminar" onAction="#onEliminar"/>
-    <Button text="Limpiar" onAction="#onLimpiar"/>
-  </HBox>
+          <Label text="Peso" GridPane.rowIndex="4" GridPane.columnIndex="0"/>
+          <TextField fx:id="txtPeso" GridPane.rowIndex="4" GridPane.columnIndex="1"/>
 
-  <TableView fx:id="tblDrones" prefHeight="260">
-    <columns>
-      <TableColumn fx:id="colId" text="Id" prefWidth="70"/>
-      <TableColumn fx:id="colSerial" text="Serial" prefWidth="110"/>
-      <TableColumn fx:id="colModelo" text="Modelo" prefWidth="110"/>
-      <TableColumn fx:id="colFabricante" text="Fabricante" prefWidth="120"/>
-      <TableColumn fx:id="colPeso" text="Peso" prefWidth="70"/>
-      <TableColumn fx:id="colTipo" text="Tipo" prefWidth="110"/>
-    </columns>
-  </TableView>
+          <Label text="Tipo" GridPane.rowIndex="5" GridPane.columnIndex="0"/>
+          <ComboBox fx:id="cmbTipo" prefWidth="200" GridPane.rowIndex="5" GridPane.columnIndex="1"/>
+        </GridPane>
+
+        <HBox spacing="8">
+          <Button text="Crear" onAction="#onCrear"/>
+          <Button text="Buscar por id" onAction="#onBuscar"/>
+          <Button text="Modificar" onAction="#onModificar"/>
+          <Button text="Eliminar" onAction="#onEliminar"/>
+          <Button text="Limpiar" onAction="#onLimpiar"/>
+        </HBox>
+
+        <TableView fx:id="tblDrones" prefHeight="260">
+          <columns>
+            <TableColumn fx:id="colId" text="Id" prefWidth="70"/>
+            <TableColumn fx:id="colSerial" text="Serial" prefWidth="110"/>
+            <TableColumn fx:id="colModelo" text="Modelo" prefWidth="110"/>
+            <TableColumn fx:id="colFabricante" text="Fabricante" prefWidth="120"/>
+            <TableColumn fx:id="colPeso" text="Peso" prefWidth="70"/>
+            <TableColumn fx:id="colTipo" text="Tipo" prefWidth="110"/>
+          </columns>
+        </TableView>
+      </VBox>
+    </Tab>
+
+    <!-- ================= Pestaña 2: Clima y viabilidad de vuelo ================= -->
+    <Tab text="Clima de vuelo">
+      <VBox spacing="12">
+        <padding>
+          <Insets top="16" right="16" bottom="16" left="16"/>
+        </padding>
+
+        <HBox spacing="8">
+          <Label text="Ciudad" minWidth="60"/>
+          <TextField fx:id="txtCiudad" promptText="Ej: Bogotá" HBox.hgrow="ALWAYS"
+                     onAction="#onConsultarClima"/>
+          <Button fx:id="btnConsultarClima" text="Consultar clima" onAction="#onConsultarClima"/>
+          <ProgressIndicator fx:id="prgClima" visible="false" prefWidth="22" prefHeight="22"/>
+        </HBox>
+
+        <GridPane hgap="10" vgap="6">
+          <Label text="Ubicación" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+          <Label fx:id="lblUbicacion" text="—" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+          <Label text="Temperatura" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+          <Label fx:id="lblTemperatura" text="—" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+          <Label text="Humedad" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+          <Label fx:id="lblHumedad" text="—" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+
+          <Label text="Viento" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+          <Label fx:id="lblViento" text="—" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+
+          <Label text="Presión" GridPane.rowIndex="4" GridPane.columnIndex="0"/>
+          <Label fx:id="lblPresion" text="—" GridPane.rowIndex="4" GridPane.columnIndex="1"/>
+
+          <Label text="Visibilidad" GridPane.rowIndex="5" GridPane.columnIndex="0"/>
+          <Label fx:id="lblVisibilidad" text="—" GridPane.rowIndex="5" GridPane.columnIndex="1"/>
+        </GridPane>
+
+        <Label fx:id="lblResultadoClima" wrapText="true" maxWidth="560"
+               style="-fx-font-size: 14px; -fx-font-weight: bold;"/>
+
+        <TextArea fx:id="txtDetalleCadena" editable="false" wrapText="true" prefRowCount="10"
+                  promptText="Aquí aparece el detalle de la cadena de validaciones."/>
+      </VBox>
+    </Tab>
+
+  </TabPane>
 </VBox>

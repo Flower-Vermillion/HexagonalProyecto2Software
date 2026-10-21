@@ -8,15 +8,22 @@ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.EliminarDroneCasosDeUs
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerTodosDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerUnoDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.ModificarDroneCasosDeUso;
+import co.edu.poli.sw2Hexagonal.aplicacion.weather.GetWeatherByCityCasoDeUso;
 import co.edu.poli.sw2Hexagonal.dominio.modelo.Drone;
+import co.edu.poli.sw2Hexagonal.dominio.modelo.weather.Weather;
 import javafx.collections.FXCollections;
+import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
 
@@ -46,6 +53,21 @@ public class ControlFormDrone {
     private LeerTodosDroneCasosDeUso leerTodosDrone;
     private ModificarDroneCasosDeUso modificarDrone;
     private EliminarDroneCasosDeUso eliminarDrone;
+
+    // ---------- Pestaña "Clima de vuelo" ----------
+    @FXML private TextField txtCiudad;
+    @FXML private Button btnConsultarClima;
+    @FXML private ProgressIndicator prgClima;
+    @FXML private Label lblUbicacion;
+    @FXML private Label lblTemperatura;
+    @FXML private Label lblHumedad;
+    @FXML private Label lblViento;
+    @FXML private Label lblPresion;
+    @FXML private Label lblVisibilidad;
+    @FXML private Label lblResultadoClima;
+    @FXML private TextArea txtDetalleCadena;
+
+    private GetWeatherByCityCasoDeUso consultarClima;
 
     @FXML
     private void initialize() {
@@ -152,6 +174,93 @@ public class ControlFormDrone {
     @FXML
     private void onLimpiar() {
         limpiarFormulario();
+    }
+
+    // ---------- Clima de vuelo ----------
+
+    /**
+     * Inyecta el caso de uso de clima desde App.
+     *
+     * @param consultarClima caso de uso que geocodifica, consulta y evalúa el clima
+     */
+    public void setClimaCasoDeUso(GetWeatherByCityCasoDeUso consultarClima) {
+        this.consultarClima = consultarClima;
+    }
+
+    /**
+     * Consulta el clima en un hilo aparte para no congelar la ventana mientras
+     * responden las APIs. Al terminar se muestra el resultado de la cadena.
+     */
+    @FXML
+    private void onConsultarClima() {
+        if (consultarClima == null) {
+            mostrar(AlertType.ERROR, "El servicio de clima no está configurado.");
+            return;
+        }
+
+        String ciudad = txtCiudad.getText();
+
+        Task<Weather> tarea = new Task<>() {
+            @Override
+            protected Weather call() throws Exception {
+                return consultarClima.ejecutar(ciudad);
+            }
+        };
+
+        tarea.setOnSucceeded(e -> {
+            ocupado(false);
+            mostrarClima(tarea.getValue());
+        });
+        tarea.setOnFailed(e -> {
+            ocupado(false);
+            Throwable error = tarea.getException();
+            mostrar(AlertType.ERROR, error == null ? "Error desconocido." : error.getMessage());
+        });
+
+        ocupado(true);
+        Thread hilo = new Thread(tarea, "consulta-clima");
+        hilo.setDaemon(true);
+        hilo.start();
+    }
+
+    /**
+     * Muestra el clima consultado y el resultado de la cadena de validaciones:
+     * las reglas aprobadas y, si el clima no es apto, la regla en la que se
+     * detuvo la cadena con su motivo.
+     */
+    private void mostrarClima(Weather clima) {
+        lblUbicacion.setText(clima.getNombreCompleto());
+        lblTemperatura.setText(formato(clima.getTemperatura(), "°C"));
+        lblHumedad.setText(formato(clima.getHumedad(), "%"));
+        lblViento.setText(formato(clima.getVelocidadViento(), "km/h"));
+        lblPresion.setText(formato(clima.getPresion(), "hPa"));
+        lblVisibilidad.setText(formato(clima.getVisibilidad(), "km"));
+
+        lblResultadoClima.setText(clima.getMensajeEvaluacion());
+        lblResultadoClima.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: "
+                + (clima.isApto() ? "#1b7f3b" : "#b3261e") + ";");
+
+        StringBuilder detalle = new StringBuilder("Cadena de validaciones:\n");
+        for (String regla : clima.getValidacionesAprobadas()) {
+            detalle.append("  ✔ ").append(regla).append('\n');
+        }
+        if (!clima.isApto() && clima.getReglaIncumplida() != null) {
+            detalle.append("  ✘ ").append(clima.getReglaIncumplida())
+                   .append(" — ").append(clima.getMotivoRechazo()).append('\n')
+                   .append("  (la cadena se detuvo en esta regla)\n");
+        }
+        detalle.append('\n').append(clima.getMensajeEvaluacion());
+        txtDetalleCadena.setText(detalle.toString());
+    }
+
+    private void ocupado(boolean ocupado) {
+        btnConsultarClima.setDisable(ocupado);
+        txtCiudad.setDisable(ocupado);
+        prgClima.setVisible(ocupado);
+    }
+
+    private static String formato(double valor, String unidad) {
+        return Double.isNaN(valor) ? "no disponible" : String.format("%.1f %s", valor, unidad);
     }
 
     // ---------- Métodos auxiliares ----------

@@ -10,8 +10,13 @@ import co.edu.poli.sw2Hexagonal.aplicacion.servicio.EliminarDroneServicio;
 import co.edu.poli.sw2Hexagonal.aplicacion.servicio.LeerTodosDroneServicio;
 import co.edu.poli.sw2Hexagonal.aplicacion.servicio.LeerUnoDroneServicio;
 import co.edu.poli.sw2Hexagonal.aplicacion.servicio.ModificarDroneServicio;
+import co.edu.poli.sw2Hexagonal.aplicacion.weather.GetWeatherByCityCasoDeUso;
 import co.edu.poli.sw2Hexagonal.infraestructura.persistencia.MySqlDroneRepository;
 import co.edu.poli.sw2Hexagonal.infraestructura.ui.ControlFormDrone;
+import co.edu.poli.sw2Hexagonal.infraestructura.weather.GeoApiAdapter;
+import co.edu.poli.sw2Hexagonal.infraestructura.weather.GeoApiClient;
+import co.edu.poli.sw2Hexagonal.infraestructura.weather.OpenWeatherAdapter;
+import co.edu.poli.sw2Hexagonal.infraestructura.weather.OpenWeatherClient;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
@@ -32,6 +37,8 @@ import javafx.stage.Stage;
  *                          →  LeerTodosDroneServicio
  *                          →  ModificarDroneServicio
  *                          →  EliminarDroneServicio
+ *
+ *   GeoApiAdapter + OpenWeatherAdapter  →  GetWeatherByCityCasoDeUso  →  ControlFormDrone
  * </pre>
  *
  * @see ControlFormDrone
@@ -69,7 +76,16 @@ public class App extends Application {
         controlador.setUseCases(crearUC, leerUnoUC, leerTodosUC, modificarUC, eliminarUC);
         controlador.cargarDrones();
 
-        // 5. Mostrar la ventana
+        // 5. Clima: adaptadores de salida (Open-Meteo) → caso de uso (cadena de validaciones)
+        GeoApiAdapter geoApi = new GeoApiAdapter(new GeoApiClient());
+        OpenWeatherAdapter openWeather = new OpenWeatherAdapter(new OpenWeatherClient());
+
+        GetWeatherByCityCasoDeUso climaUC = new GetWeatherByCityCasoDeUso(
+                geoApi::buscarCiudad,
+                openWeather::obtenerClimaActual);
+        controlador.setClimaCasoDeUso(climaUC);
+
+        // 6. Mostrar la ventana
         stage.setTitle("Gestión de Drones");
         stage.setResizable(false);
         stage.setScene(new Scene(root));
