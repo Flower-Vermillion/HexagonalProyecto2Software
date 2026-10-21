@@ -14,8 +14,8 @@ import co.edu.poli.sw2Hexagonal.infraestructura.persistencia.MySqlDroneRepositor
 import co.edu.poli.sw2Hexagonal.infraestructura.ui.ControlFormDrone;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
-import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 /**
@@ -62,7 +62,7 @@ public class App extends Application {
         // 3. Cargar la vista FXML y obtener el controlador
         FXMLLoader loader = new FXMLLoader(
                 getClass().getResource("/co/edu/poli/sw2Hexagonal/vista/formDrone.fxml"));
-        VBox root = loader.load();
+        Parent root = loader.load(); // la raíz ahora es un ScrollPane
 
         // 4. Inyectar use cases en el adaptador de entrada (UI)
         ControlFormDrone controlador = loader.getController();
@@ -71,7 +71,6 @@ public class App extends Application {
 
         // 5. Mostrar la ventana
         stage.setTitle("Gestión de Drones");
-        stage.setResizable(false);
         stage.setScene(new Scene(root));
         stage.show();
     }

@@ -1,24 +1,49 @@
 package co.edu.poli.sw2Hexagonal.infraestructura.ui;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import co.edu.poli.sw2Hexagonal.aplicacion.observer.ConsoleObserver;
+import co.edu.poli.sw2Hexagonal.aplicacion.observer.DashboardObserver;
+import co.edu.poli.sw2Hexagonal.aplicacion.observer.FlightStatusObserver;
+import co.edu.poli.sw2Hexagonal.aplicacion.observer.LoggerObserver;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.CrearDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.EliminarDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerTodosDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerUnoDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.ModificarDroneCasosDeUso;
+import co.edu.poli.sw2Hexagonal.aplicacion.weather.GetWeatherByCityCasoDeUso;
+import co.edu.poli.sw2Hexagonal.aplicacion.weather.WeatherNotificationService;
 import co.edu.poli.sw2Hexagonal.dominio.modelo.Drone;
+import co.edu.poli.sw2Hexagonal.dominio.modelo.weather.Weather;
+import co.edu.poli.sw2Hexagonal.dominio.modelo.weather.WeatherObserver;
+import co.edu.poli.sw2Hexagonal.infraestructura.weather.GeoApiAdapter;
+import co.edu.poli.sw2Hexagonal.infraestructura.weather.GeoApiClient;
+import co.edu.poli.sw2Hexagonal.infraestructura.weather.OpenWeatherAdapter;
+import co.edu.poli.sw2Hexagonal.infraestructura.weather.OpenWeatherClient;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.concurrent.Task;
 import javafx.fxml.FXML;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
 
 /**
  * Adaptador de entrada — controlador del formulario de drones.
@@ -41,11 +66,39 @@ public class ControlFormDrone {
     @FXML private TableColumn<Drone, Double> colPeso;
     @FXML private TableColumn<Drone, String> colTipo;
 
+    // ===== Clima (Observer) =====
+    @FXML private CheckBox chkConsola;
+    @FXML private CheckBox chkLogger;
+    @FXML private CheckBox chkEstadoVuelo;
+    @FXML private CheckBox chkDashboard;
+    @FXML private Label lblObservadores;
+    @FXML private TextField txtCiudad;
+    @FXML private Button btnConsultarClima;
+    @FXML private Label lblTemperatura;
+    @FXML private Label lblHumedad;
+    @FXML private Label lblViento;
+    @FXML private Label lblPresion;
+    @FXML private Label lblVisibilidad;
+
     private CrearDroneCasosDeUso crearDrone;
     private LeerUnoDroneCasosDeUso leerUnoDrone;
     private LeerTodosDroneCasosDeUso leerTodosDrone;
     private ModificarDroneCasosDeUso modificarDrone;
     private EliminarDroneCasosDeUso eliminarDrone;
+
+    private final WeatherNotificationService weatherService = new WeatherNotificationService(
+            new GetWeatherByCityCasoDeUso(
+                    new GeoApiAdapter(new GeoApiClient()),
+                    new OpenWeatherAdapter(new OpenWeatherClient())));
+
+    private final ConsoleObserver consoleObserver = new ConsoleObserver();
+    private final LoggerObserver loggerObserver = new LoggerObserver();
+    private final FlightStatusObserver flightStatusObserver = new FlightStatusObserver();
+    private DashboardObserver dashboardObserver;
+
+    // Ventana emergente de notificaciones
+    private Stage ventanaNotificaciones;
+    private final ListView<String> listaNotificaciones = new ListView<>();
 
     @FXML
     private void initialize() {
@@ -64,9 +117,12 @@ public class ControlFormDrone {
                     if (seleccionado != null) {
                         mostrarEnFormulario(seleccionado);
                     }
+                    actualizarLabelObservadores();
                 });
+
+        inicializarClima();
     }
-    
+
     /**
      * Inyecta los casos de uso desde App (composición de dependencias).
      */
@@ -152,6 +208,133 @@ public class ControlFormDrone {
     @FXML
     private void onLimpiar() {
         limpiarFormulario();
+    }
+
+    // ================= Clima (Observer) =================
+
+    private void inicializarClima() {
+        dashboardObserver = new DashboardObserver(
+                texto -> Platform.runLater(() -> mostrarNotificacion(texto)));
+
+        tblDrones.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+    }
+
+    /** Observers marcados en los checkboxes. */
+    private List<WeatherObserver> observersSeleccionados() {
+        List<WeatherObserver> lista = new ArrayList<>();
+        if (chkConsola.isSelected()) lista.add(consoleObserver);
+        if (chkLogger.isSelected()) lista.add(loggerObserver);
+        if (chkEstadoVuelo.isSelected()) lista.add(flightStatusObserver);
+        if (chkDashboard.isSelected()) lista.add(dashboardObserver);
+        return lista;
+    }
+
+    @FXML
+    private void onSuscribir() {
+        List<Drone> drones = new ArrayList<>(tblDrones.getSelectionModel().getSelectedItems());
+        if (drones.isEmpty()) {
+            mostrar(AlertType.WARNING, "Seleccione al menos un dron en la tabla.");
+            return;
+        }
+        List<WeatherObserver> observers = observersSeleccionados();
+        if (observers.isEmpty()) {
+            mostrar(AlertType.WARNING, "Marque al menos un observer.");
+            return;
+        }
+        for (Drone d : drones) {
+            weatherService.suscribir(d, observers.toArray(new WeatherObserver[0]));
+        }
+        actualizarLabelObservadores();
+    }
+
+    @FXML
+    private void onDesuscribir() {
+        List<Drone> drones = new ArrayList<>(tblDrones.getSelectionModel().getSelectedItems());
+        if (drones.isEmpty()) {
+            mostrar(AlertType.WARNING, "Seleccione al menos un dron en la tabla.");
+            return;
+        }
+        for (Drone d : drones) {
+            for (WeatherObserver o : observersSeleccionados()) {
+                weatherService.desuscribir(d, o);
+            }
+        }
+        actualizarLabelObservadores();
+    }
+
+    @FXML
+    private void onConsultarClima() {
+        String ciudad = txtCiudad.getText().trim();
+        if (ciudad.isEmpty()) {
+            mostrar(AlertType.WARNING, "Escriba una ciudad.");
+            return;
+        }
+        List<Drone> drones = new ArrayList<>(tblDrones.getItems());
+
+        Task<Weather> tarea = new Task<>() {
+            @Override
+            protected Weather call() {
+                return weatherService.actualizarClima(ciudad, drones);
+            }
+        };
+        tarea.setOnSucceeded(e -> {
+            mostrarClima(tarea.getValue());
+            btnConsultarClima.setDisable(false);
+        });
+        tarea.setOnFailed(e -> {
+            btnConsultarClima.setDisable(false);
+            mostrar(AlertType.ERROR, tarea.getException().getMessage());
+        });
+
+        btnConsultarClima.setDisable(true);
+        Thread hilo = new Thread(tarea);
+        hilo.setDaemon(true);
+        hilo.start();
+    }
+
+    private void mostrarClima(Weather clima) {
+        lblTemperatura.setText(String.format("%.1f °C", clima.getTemperatura()));
+        lblHumedad.setText(String.format("%.0f %%", clima.getHumedad()));
+        lblViento.setText(String.format("%.1f km/h", clima.getVelocidadViento()));
+        lblPresion.setText(String.format("%.1f hPa", clima.getPresion()));
+        lblVisibilidad.setText(String.format("%.0f m", clima.getVisibilidad()));
+    }
+
+    /** Muestra cada notificación del DashboardObserver en una ventana emergente. */
+    private void mostrarNotificacion(String texto) {
+        listaNotificaciones.getItems().add(0, texto);
+
+        if (ventanaNotificaciones == null) {
+            Button btnLimpiar = new Button("Limpiar");
+            btnLimpiar.setOnAction(e -> listaNotificaciones.getItems().clear());
+
+            VBox raiz = new VBox(8,
+                    new Label("Notificaciones recibidas (DashboardObserver)"),
+                    listaNotificaciones,
+                    btnLimpiar);
+            raiz.setPadding(new Insets(12));
+            VBox.setVgrow(listaNotificaciones, Priority.ALWAYS);
+
+            ventanaNotificaciones = new Stage();
+            ventanaNotificaciones.setTitle("Notificaciones de clima");
+            ventanaNotificaciones.initOwner(tblDrones.getScene().getWindow());
+            ventanaNotificaciones.setScene(new Scene(raiz, 600, 320));
+        }
+
+        if (!ventanaNotificaciones.isShowing()) {
+            ventanaNotificaciones.show();
+        }
+        ventanaNotificaciones.toFront();
+    }
+
+    private void actualizarLabelObservadores() {
+        Drone d = tblDrones.getSelectionModel().getSelectedItem();
+        if (d == null || d.getId() == null) {
+            lblObservadores.setText("Seleccione un dron");
+            return;
+        }
+        lblObservadores.setText("Dron " + d.getId() + ": "
+                + weatherService.getObservadores(d).size() + " observer(s)");
     }
 
     // ---------- Métodos auxiliares ----------
