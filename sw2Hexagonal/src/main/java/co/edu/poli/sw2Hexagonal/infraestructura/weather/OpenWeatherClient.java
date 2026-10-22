@@ -7,18 +7,41 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
-/** Cliente HTTP de la API de clima actual de Open-Meteo. */
+/**
+ * Cliente HTTP de la API de clima actual de Open-Meteo
+ * ({@code https://api.open-meteo.com/v1/forecast}).
+ * <p>
+ * Solicita únicamente las cinco variables que exige el negocio y devuelve el
+ * JSON sin procesar. La traducción al dominio la hace
+ * {@link OpenWeatherAdapter}.
+ * </p>
+ */
 public class OpenWeatherClient {
 
+    /** URL base de la API de clima. */
     private static final String URL_BASE = "https://api.open-meteo.com/v1/forecast";
-    private static final String VARIABLES =
-            "temperature_2m,relative_humidity_2m,wind_speed_10m,surface_pressure,visibility";
 
+    /**
+     * Variables solicitadas: temperatura, humedad, viento, presión a nivel
+     * del mar y visibilidad.
+     */
+    private static final String VARIABLES =
+            "temperature_2m,relative_humidity_2m,wind_speed_10m,pressure_msl,visibility";
+
+    /** Cliente HTTP reutilizable con tiempo de conexión limitado. */
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
-    /** Devuelve el JSON crudo del clima actual en esas coordenadas. */
+    /**
+     * Consulta el clima actual en unas coordenadas.
+     *
+     * @param latitud  latitud en grados decimales
+     * @param longitud longitud en grados decimales
+     * @return JSON de respuesta con el bloque {@code current}
+     * @throws IllegalStateException si la API responde con error, falla la
+     *                               conexión o la consulta se interrumpe
+     */
     public String consultarActual(double latitud, double longitud) {
         String url = URL_BASE
                 + "?latitude=" + latitud
