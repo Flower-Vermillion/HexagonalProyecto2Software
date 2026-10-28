@@ -131,5 +131,59 @@
       </ScrollPane>
     </Tab>
 
+    <!-- ================= Pestaña 3: Consumo energético (Strategy) ================= -->
+    <Tab text="Consumo energético">
+      <ScrollPane fitToWidth="true">
+        <VBox spacing="12">
+          <padding>
+            <Insets top="16" right="16" bottom="16" left="16"/>
+          </padding>
+
+          <GridPane hgap="10" vgap="8">
+            <Label text="Dron" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+            <ComboBox fx:id="cmbDroneConsumo" prefWidth="320" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+            <Label text="Estrategia" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+            <ComboBox fx:id="cmbEstrategia" prefWidth="320" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+          </GridPane>
+
+          <HBox spacing="8">
+            <Button text="Cargar ruta (JSON)" onAction="#onCargarRuta"/>
+            <Label fx:id="lblArchivoRuta" text="Ningún archivo cargado"/>
+          </HBox>
+
+          <GridPane hgap="10" vgap="6">
+            <Label text="Origen" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+            <Label fx:id="lblOrigen" text="—" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+            <Label text="Destino" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+            <Label fx:id="lblDestino" text="—" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+          </GridPane>
+
+          <Button text="Calcular consumo" onAction="#onCalcularConsumo"/>
+
+          <Separator/>
+
+          <GridPane hgap="10" vgap="6">
+            <Label text="Dron" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+            <Label fx:id="lblDroneConsumo" text="—" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+            <Label text="Distancia" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+            <Label fx:id="lblDistancia" text="—" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+            <Label text="Estrategia" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+            <Label fx:id="lblEstrategia" text="—" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+
+            <Label text="Cálculo" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+            <Label fx:id="lblCalculo" text="—" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+
+            <Label text="Batería requerida" GridPane.rowIndex="4" GridPane.columnIndex="0"/>
+            <Label fx:id="lblBateria" text="—" style="-fx-font-weight: bold; -fx-font-size: 14px;"
+                   GridPane.rowIndex="4" GridPane.columnIndex="1"/>
+          </GridPane>
+        </VBox>
+      </ScrollPane>
+    </Tab>
+
   </TabPane>
 </VBox>

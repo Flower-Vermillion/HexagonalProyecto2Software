@@ -1,0 +1,12 @@
+{
+  "origen": {
+    "nombre": "Punto Origen",
+    "latitud": 4.60971,
+    "longitud": -74.08175
+  },
+  "destino": {
+    "nombre": "Punto Destino",
+    "latitud": 4.70159,
+    "longitud": -74.14690
+  }
+}

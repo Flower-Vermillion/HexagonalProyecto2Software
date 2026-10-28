@@ -1,5 +1,6 @@
 package co.edu.poli.sw2Hexagonal.infraestructura.ui;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -8,6 +9,7 @@ import co.edu.poli.sw2Hexagonal.aplicacion.observer.ConsoleObserver;
 import co.edu.poli.sw2Hexagonal.aplicacion.observer.DashboardObserver;
 import co.edu.poli.sw2Hexagonal.aplicacion.observer.FlightStatusObserver;
 import co.edu.poli.sw2Hexagonal.aplicacion.observer.LoggerObserver;
+import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.CalcularConsumoCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.CrearDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.EliminarDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerTodosDroneCasosDeUso;
@@ -17,8 +19,14 @@ import co.edu.poli.sw2Hexagonal.aplicacion.weather.GetWeatherByCityCasoDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.weather.WeatherNotificationService;
 import co.edu.poli.sw2Hexagonal.dominio.modelo.Drone;
 import co.edu.poli.sw2Hexagonal.dominio.modelo.chain.WeatherHandler;
+import co.edu.poli.sw2Hexagonal.dominio.modelo.strategy.AhorroStrategy;
+import co.edu.poli.sw2Hexagonal.dominio.modelo.strategy.AltoRendimientoStrategy;
+import co.edu.poli.sw2Hexagonal.dominio.modelo.strategy.ConsumoStrategy;
+import co.edu.poli.sw2Hexagonal.dominio.modelo.strategy.NormalStrategy;
+import co.edu.poli.sw2Hexagonal.dominio.modelo.strategy.PuntoGeografico;
 import co.edu.poli.sw2Hexagonal.dominio.modelo.weather.Weather;
 import co.edu.poli.sw2Hexagonal.dominio.modelo.weather.WeatherObserver;
+import co.edu.poli.sw2Hexagonal.infraestructura.loader.JsonRutaLoader;
 import co.edu.poli.sw2Hexagonal.infraestructura.weather.GeoApiAdapter;
 import co.edu.poli.sw2Hexagonal.infraestructura.weather.GeoApiClient;
 import co.edu.poli.sw2Hexagonal.infraestructura.weather.OpenWeatherAdapter;
@@ -46,13 +54,15 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.StringConverter;
 
 /**
  * Adaptador de entrada: controlador JavaFX del formulario de drones
  * ({@code formDrone.fxml}).
  * <p>
- * La vista tiene dos pestañas independientes:
+ * La vista tiene tres pestañas independientes:
  * </p>
  * <ul>
  *   <li><b>Drones</b>: CRUD de drones y patrón <b>Observer</b>. Permite
@@ -63,6 +73,9 @@ import javafx.stage.Stage;
  *   <li><b>Clima de vuelo</b>: patrón <b>Chain of Responsibility</b>.
  *       Consulta el clima de una ciudad y evalúa la viabilidad de vuelo con
  *       {@link WeatherHandler}, sin notificar a ningún observador.</li>
+ *   <li><b>Consumo energético</b>: patrón <b>Strategy</b>. Carga una ruta
+ *       desde un archivo JSON y estima la batería requerida por un dron con
+ *       la estrategia de consumo seleccionada.</li>
  * </ul>
  * <p>
  * Las consultas a las APIs se ejecutan en un hilo aparte ({@link Task}) para
@@ -72,6 +85,7 @@ import javafx.stage.Stage;
  * @see WeatherNotificationService
  * @see GetWeatherByCityCasoDeUso
  * @see WeatherHandler
+ * @see CalcularConsumoCasosDeUso
  */
 public class ControlFormDrone {
 
@@ -147,6 +161,29 @@ public class ControlFormDrone {
     /** Muestra el recorrido completo de la cadena de validaciones. */
     @FXML private TextArea txtDetalleCadena;
 
+    // ===== Strategy (Consumo energético) =====
+
+    /** Selector del dron para el cálculo de consumo. */
+    @FXML private ComboBox<Drone> cmbDroneConsumo;
+    /** Selector de la estrategia de consumo. */
+    @FXML private ComboBox<ConsumoStrategy> cmbEstrategia;
+    /** Muestra el nombre del archivo de ruta cargado. */
+    @FXML private Label lblArchivoRuta;
+    /** Muestra el punto de origen. */
+    @FXML private Label lblOrigen;
+    /** Muestra el punto de destino. */
+    @FXML private Label lblDestino;
+    /** Muestra el dron usado en el cálculo. */
+    @FXML private Label lblDroneConsumo;
+    /** Muestra la distancia entre origen y destino. */
+    @FXML private Label lblDistancia;
+    /** Muestra la estrategia aplicada. */
+    @FXML private Label lblEstrategia;
+    /** Muestra la operación realizada. */
+    @FXML private Label lblCalculo;
+    /** Muestra la batería requerida. */
+    @FXML private Label lblBateria;
+
     // ===== Casos de uso CRUD =====
 
     /** Caso de uso para crear drones. */
@@ -188,10 +225,19 @@ public class ControlFormDrone {
     /** Lista de notificaciones que se muestra en la ventana emergente. */
     private final ListView<String> listaNotificaciones = new ListView<>();
 
+    // ===== Consumo energético =====
+
+    /** Caso de uso de consumo energético (Context del patrón Strategy). */
+    private CalcularConsumoCasosDeUso calcularConsumo;
+    /** Punto de origen cargado desde el JSON. */
+    private PuntoGeografico origen;
+    /** Punto de destino cargado desde el JSON. */
+    private PuntoGeografico destino;
+
     /**
      * Inicializa la vista después de cargar el FXML: configura el combo de
-     * tipos, las columnas de la tabla, el listener de selección y el
-     * patrón Observer.
+     * tipos, las columnas de la tabla, el listener de selección, el patrón
+     * Observer y la pestaña de consumo energético.
      */
     @FXML
     private void initialize() {
@@ -214,10 +260,12 @@ public class ControlFormDrone {
                 });
 
         inicializarObserver();
+        inicializarConsumo();
     }
 
     /**
-     * Inyecta los casos de uso desde {@code App} (composición de dependencias).
+     * Inyecta los casos de uso del CRUD desde {@code App} (composición de
+     * dependencias).
      *
      * @param crear     caso de uso para crear drones
      * @param leerUno   caso de uso para buscar un dron por id
@@ -235,6 +283,15 @@ public class ControlFormDrone {
         this.leerTodosDrone = leerTodos;
         this.modificarDrone = modificar;
         this.eliminarDrone = eliminar;
+    }
+
+    /**
+     * Inyecta el caso de uso de consumo energético desde {@code App}.
+     *
+     * @param calcularConsumo Context del patrón Strategy
+     */
+    public void setCalcularConsumo(CalcularConsumoCasosDeUso calcularConsumo) {
+        this.calcularConsumo = calcularConsumo;
     }
 
     /**
@@ -545,6 +602,123 @@ public class ControlFormDrone {
         txtDetalleCadena.setText(resultado.getDetalle());
     }
 
+    // ================= Strategy =================
+
+    /**
+     * Configura la pestaña de consumo: cómo se muestran los drones y las
+     * estrategias en los combos, y las tres estrategias disponibles.
+     */
+    private void inicializarConsumo() {
+        cmbDroneConsumo.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(Drone d) {
+                return d == null ? "" : describirDrone(d);
+            }
+
+            @Override
+            public Drone fromString(String texto) {
+                return null;
+            }
+        });
+
+        cmbEstrategia.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(ConsumoStrategy s) {
+                return s == null ? "" : s.getNombre() + " (× " + s.getFactor() + ")";
+            }
+
+            @Override
+            public ConsumoStrategy fromString(String texto) {
+                return null;
+            }
+        });
+
+        cmbEstrategia.setItems(FXCollections.observableArrayList(
+                new AhorroStrategy(),
+                new NormalStrategy(),
+                new AltoRendimientoStrategy()));
+    }
+
+    /**
+     * Abre un selector de archivos, ubicado en la carpeta del proyecto, y
+     * carga el origen y el destino desde un archivo JSON.
+     */
+    @FXML
+    private void onCargarRuta() {
+        FileChooser selector = new FileChooser();
+        selector.setTitle("Seleccionar ruta");
+        selector.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter("Archivos JSON", "*.json"));
+        selector.setInitialDirectory(new File(System.getProperty("user.dir")));
+
+        File archivo = selector.showOpenDialog(tblDrones.getScene().getWindow());
+        if (archivo == null) {
+            return;
+        }
+
+        try {
+            JsonRutaLoader loader = new JsonRutaLoader();
+            loader.cargar(archivo.toPath());
+            origen = loader.getOrigen();
+            destino = loader.getDestino();
+
+            lblArchivoRuta.setText(archivo.getName());
+            lblOrigen.setText(origen.toString());
+            lblDestino.setText(destino.toString());
+        } catch (Exception e) {
+            mostrar(AlertType.ERROR, e.getMessage());
+        }
+    }
+
+    /**
+     * Aplica la estrategia seleccionada al recorrido cargado y muestra el
+     * dron, la distancia, la estrategia, la operación y la batería requerida.
+     */
+    @FXML
+    private void onCalcularConsumo() {
+        Drone drone = cmbDroneConsumo.getValue();
+        ConsumoStrategy estrategia = cmbEstrategia.getValue();
+
+        if (drone == null) {
+            mostrar(AlertType.WARNING, "Seleccione un dron.");
+            return;
+        }
+        if (origen == null || destino == null) {
+            mostrar(AlertType.WARNING, "Cargue un archivo JSON con la ruta.");
+            return;
+        }
+        if (estrategia == null) {
+            mostrar(AlertType.WARNING, "Seleccione una estrategia de consumo.");
+            return;
+        }
+
+        try {
+            calcularConsumo.setEstrategia(estrategia);
+            double distancia = calcularConsumo.calcularDistanciaKm(origen, destino);
+            double bateria = calcularConsumo.calcularConsumo(distancia);
+
+            lblDroneConsumo.setText(describirDrone(drone));
+            lblDistancia.setText(String.format("%.2f km", distancia));
+            lblEstrategia.setText(estrategia.getNombre());
+            lblCalculo.setText(String.format("%.2f km × %.1f = %.2f",
+                    distancia, estrategia.getFactor(), bateria));
+            lblBateria.setText(String.format("%.2f", bateria));
+        } catch (Exception e) {
+            mostrar(AlertType.ERROR, e.getMessage());
+        }
+    }
+
+    /**
+     * Construye el texto con el que se muestra un dron en la pestaña de
+     * consumo.
+     *
+     * @param drone dron
+     * @return id, modelo y tipo del dron
+     */
+    private String describirDrone(Drone drone) {
+        return drone.getId() + " - " + drone.getModelo() + " (" + drone.getTipo() + ")";
+    }
+
     // ---------- Métodos auxiliares ----------
 
     /**
@@ -559,12 +733,14 @@ public class ControlFormDrone {
     }
 
     /**
-     * Recarga la tabla con todos los drones de la base de datos.
+     * Recarga la tabla con todos los drones de la base de datos y actualiza
+     * el selector de drones de la pestaña de consumo.
      */
     private void cargarTabla() {
         try {
             List<Drone> drones = leerTodosDrone.leerTodos();
             tblDrones.setItems(FXCollections.observableArrayList(drones));
+            cmbDroneConsumo.setItems(tblDrones.getItems());
         } catch (Exception e) {
             mostrar(AlertType.ERROR, e.getMessage());
         }
