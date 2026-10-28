@@ -5,8 +5,11 @@ co.edu.poli.sw2Hexagonal.aplicacion.servicio
 co.edu.poli.sw2Hexagonal.aplicacion.weather
 co.edu.poli.sw2Hexagonal.dominio.modelo
 co.edu.poli.sw2Hexagonal.dominio.modelo.chain
+co.edu.poli.sw2Hexagonal.dominio.modelo.strategy
 co.edu.poli.sw2Hexagonal.dominio.modelo.weather
+co.edu.poli.sw2Hexagonal.infraestructura.loader
 co.edu.poli.sw2Hexagonal.infraestructura.persistencia
 co.edu.poli.sw2Hexagonal.infraestructura.ui
+co.edu.poli.sw2Hexagonal.infraestructura.util
 co.edu.poli.sw2Hexagonal.infraestructura.weather
 co.edu.poli.sw2Hexagonal.vista
