@@ -15,10 +15,16 @@ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.EliminarDroneCasosDeUs
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerTodosDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerUnoDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.ModificarDroneCasosDeUso;
+import co.edu.poli.sw2Hexagonal.aplicacion.servicio.DroneOperacionServicio;
+import co.edu.poli.sw2Hexagonal.aplicacion.servicio.ProgramadorTareas;
 import co.edu.poli.sw2Hexagonal.aplicacion.weather.GetWeatherByCityCasoDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.weather.WeatherNotificationService;
 import co.edu.poli.sw2Hexagonal.dominio.modelo.Drone;
 import co.edu.poli.sw2Hexagonal.dominio.modelo.chain.WeatherHandler;
+import co.edu.poli.sw2Hexagonal.dominio.modelo.command.DroneCommand;
+import co.edu.poli.sw2Hexagonal.dominio.modelo.command.EscanearZonaCommand;
+import co.edu.poli.sw2Hexagonal.dominio.modelo.command.MedirTemperaturaCommand;
+import co.edu.poli.sw2Hexagonal.dominio.modelo.command.TomarFotografiaCommand;
 import co.edu.poli.sw2Hexagonal.dominio.modelo.strategy.AhorroStrategy;
 import co.edu.poli.sw2Hexagonal.dominio.modelo.strategy.AltoRendimientoStrategy;
 import co.edu.poli.sw2Hexagonal.dominio.modelo.strategy.ConsumoStrategy;
@@ -62,7 +68,7 @@ import javafx.util.StringConverter;
  * Adaptador de entrada: controlador JavaFX del formulario de drones
  * ({@code formDrone.fxml}).
  * <p>
- * La vista tiene tres pestañas independientes:
+ * La vista tiene cuatro pestañas independientes:
  * </p>
  * <ul>
  *   <li><b>Drones</b>: CRUD de drones y patrón <b>Observer</b>. Permite
@@ -76,6 +82,8 @@ import javafx.util.StringConverter;
  *   <li><b>Consumo energético</b>: patrón <b>Strategy</b>. Carga una ruta
  *       desde un archivo JSON y estima la batería requerida por un dron con
  *       la estrategia de consumo seleccionada.</li>
+ *   <li><b>Misión</b>: patrón <b>Command</b>. Programa una secuencia de
+ *       tareas para un dron y las ejecuta en el orden registrado.</li>
  * </ul>
  * <p>
  * Las consultas a las APIs se ejecutan en un hilo aparte ({@link Task}) para
@@ -86,6 +94,7 @@ import javafx.util.StringConverter;
  * @see GetWeatherByCityCasoDeUso
  * @see WeatherHandler
  * @see CalcularConsumoCasosDeUso
+ * @see ProgramadorTareas
  */
 public class ControlFormDrone {
 
@@ -184,6 +193,15 @@ public class ControlFormDrone {
     /** Muestra la batería requerida. */
     @FXML private Label lblBateria;
 
+    // ===== Command (Misión) =====
+
+    /** Selector del dron que realizará la misión. */
+    @FXML private ComboBox<Drone> cmbDroneMision;
+    /** Lista de tareas programadas, en orden de ejecución. */
+    @FXML private ListView<String> lstTareas;
+    /** Muestra los resultados de la misión. */
+    @FXML private TextArea txtResultadosMision;
+
     // ===== Casos de uso CRUD =====
 
     /** Caso de uso para crear drones. */
@@ -234,10 +252,17 @@ public class ControlFormDrone {
     /** Punto de destino cargado desde el JSON. */
     private PuntoGeografico destino;
 
+    // ===== Misión =====
+
+    /** Invoker del patrón Command: guarda y ejecuta la secuencia de tareas. */
+    private final ProgramadorTareas programador = new ProgramadorTareas();
+    /** Receiver del dron seleccionado para la misión. */
+    private DroneOperacionServicio operacion;
+
     /**
      * Inicializa la vista después de cargar el FXML: configura el combo de
-     * tipos, las columnas de la tabla, el listener de selección, el patrón
-     * Observer y la pestaña de consumo energético.
+     * tipos, las columnas de la tabla, el listener de selección y las
+     * pestañas de Observer, consumo energético y misión.
      */
     @FXML
     private void initialize() {
@@ -261,6 +286,7 @@ public class ControlFormDrone {
 
         inicializarObserver();
         inicializarConsumo();
+        inicializarMision();
     }
 
     /**
@@ -609,17 +635,7 @@ public class ControlFormDrone {
      * estrategias en los combos, y las tres estrategias disponibles.
      */
     private void inicializarConsumo() {
-        cmbDroneConsumo.setConverter(new StringConverter<>() {
-            @Override
-            public String toString(Drone d) {
-                return d == null ? "" : describirDrone(d);
-            }
-
-            @Override
-            public Drone fromString(String texto) {
-                return null;
-            }
-        });
+        cmbDroneConsumo.setConverter(crearConverterDrone());
 
         cmbEstrategia.setConverter(new StringConverter<>() {
             @Override
@@ -708,9 +724,156 @@ public class ControlFormDrone {
         }
     }
 
+    // ================= Command =================
+
     /**
-     * Construye el texto con el que se muestra un dron en la pestaña de
-     * consumo.
+     * Configura la pestaña de misión. Al cambiar de dron se crea un nuevo
+     * Receiver para ese dron y se reinicia la secuencia de tareas, porque
+     * los comandos ya programados apuntan al dron anterior.
+     */
+    private void inicializarMision() {
+        cmbDroneMision.setConverter(crearConverterDrone());
+
+        cmbDroneMision.valueProperty().addListener((obs, anterior, nuevo) -> {
+            operacion = (nuevo == null) ? null : new DroneOperacionServicio(nuevo);
+            programador.limpiar();
+            refrescarTareas();
+            txtResultadosMision.clear();
+        });
+    }
+
+    /**
+     * Programa la tarea "Tomar fotografía".
+     */
+    @FXML
+    private void onAgregarFotografia() {
+        if (validarDroneMision()) {
+            programarTarea(new TomarFotografiaCommand(operacion));
+        }
+    }
+
+    /**
+     * Programa la tarea "Escanear zona".
+     */
+    @FXML
+    private void onAgregarEscaneo() {
+        if (validarDroneMision()) {
+            programarTarea(new EscanearZonaCommand(operacion));
+        }
+    }
+
+    /**
+     * Programa la tarea "Medir temperatura".
+     */
+    @FXML
+    private void onAgregarTemperatura() {
+        if (validarDroneMision()) {
+            programarTarea(new MedirTemperaturaCommand(operacion));
+        }
+    }
+
+    /**
+     * Quita de la secuencia la tarea seleccionada en la lista.
+     */
+    @FXML
+    private void onQuitarTarea() {
+        int indice = lstTareas.getSelectionModel().getSelectedIndex();
+        if (indice < 0) {
+            mostrar(AlertType.WARNING, "Seleccione una tarea de la lista.");
+            return;
+        }
+        programador.eliminar(indice);
+        refrescarTareas();
+    }
+
+    /**
+     * Elimina todas las tareas programadas y los resultados.
+     */
+    @FXML
+    private void onLimpiarTareas() {
+        programador.limpiar();
+        refrescarTareas();
+        txtResultadosMision.clear();
+    }
+
+    /**
+     * Ejecuta todas las tareas en el orden registrado y muestra los
+     * resultados.
+     */
+    @FXML
+    private void onEjecutarMision() {
+        if (!validarDroneMision()) {
+            return;
+        }
+        try {
+            List<String> resultados = programador.ejecutarMision();
+            txtResultadosMision.setText(
+                    "Misión del dron " + describirDrone(operacion.getDrone()) + "\n\n"
+                    + String.join("\n", resultados));
+        } catch (Exception e) {
+            mostrar(AlertType.WARNING, e.getMessage());
+        }
+    }
+
+    /**
+     * Agrega un comando al Invoker y actualiza la lista.
+     *
+     * @param comando tarea a programar
+     */
+    private void programarTarea(DroneCommand comando) {
+        programador.programar(comando);
+        refrescarTareas();
+    }
+
+    /**
+     * Verifica que haya un dron seleccionado para la misión.
+     *
+     * @return {@code true} si hay un dron seleccionado
+     */
+    private boolean validarDroneMision() {
+        if (operacion == null) {
+            mostrar(AlertType.WARNING, "Seleccione un dron para la misión.");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Muestra en la lista las tareas programadas, numeradas en orden.
+     */
+    private void refrescarTareas() {
+        List<String> textos = new ArrayList<>();
+        int numero = 1;
+        for (DroneCommand tarea : programador.getTareas()) {
+            textos.add(numero + ". " + tarea.getNombre());
+            numero++;
+        }
+        lstTareas.setItems(FXCollections.observableArrayList(textos));
+    }
+
+    // ---------- Métodos auxiliares ----------
+
+    /**
+     * Crea el convertidor con el que se muestran los drones en los combos.
+     *
+     * @return convertidor que muestra id, modelo y tipo
+     */
+    private StringConverter<Drone> crearConverterDrone() {
+        return new StringConverter<>() {
+            @Override
+            public String toString(Drone d) {
+                return d == null ? "" : describirDrone(d);
+            }
+
+            @Override
+            public Drone fromString(String texto) {
+                return null;
+            }
+        };
+    }
+
+    /**
+     * Construye el texto con el que se muestra un dron.
      *
      * @param drone dron
      * @return id, modelo y tipo del dron
@@ -718,8 +881,6 @@ public class ControlFormDrone {
     private String describirDrone(Drone drone) {
         return drone.getId() + " - " + drone.getModelo() + " (" + drone.getTipo() + ")";
     }
-
-    // ---------- Métodos auxiliares ----------
 
     /**
      * Ejecuta una tarea en un hilo daemon para no bloquear la interfaz.
@@ -734,13 +895,14 @@ public class ControlFormDrone {
 
     /**
      * Recarga la tabla con todos los drones de la base de datos y actualiza
-     * el selector de drones de la pestaña de consumo.
+     * los selectores de drones de las pestañas de consumo y misión.
      */
     private void cargarTabla() {
         try {
             List<Drone> drones = leerTodosDrone.leerTodos();
             tblDrones.setItems(FXCollections.observableArrayList(drones));
             cmbDroneConsumo.setItems(tblDrones.getItems());
+            cmbDroneMision.setItems(tblDrones.getItems());
         } catch (Exception e) {
             mostrar(AlertType.ERROR, e.getMessage());
         }

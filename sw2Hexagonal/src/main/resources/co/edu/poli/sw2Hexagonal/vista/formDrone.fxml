@@ -184,6 +184,43 @@
         </VBox>
       </ScrollPane>
     </Tab>
+    
+        <!-- ================= Pestaña 4: Misión (Command) ================= -->
+    <Tab text="Misión">
+      <ScrollPane fitToWidth="true">
+        <VBox spacing="12">
+          <padding>
+            <Insets top="16" right="16" bottom="16" left="16"/>
+          </padding>
+
+          <HBox spacing="8">
+            <Label text="Dron" minWidth="60"/>
+            <ComboBox fx:id="cmbDroneMision" prefWidth="320"/>
+          </HBox>
+
+          <Label text="Agregar tarea" style="-fx-font-weight: bold;"/>
+          <HBox spacing="8">
+            <Button text="Tomar fotografía" onAction="#onAgregarFotografia"/>
+            <Button text="Escanear zona" onAction="#onAgregarEscaneo"/>
+            <Button text="Medir temperatura" onAction="#onAgregarTemperatura"/>
+          </HBox>
+
+          <Label text="Tareas programadas (en orden de ejecución)"/>
+          <ListView fx:id="lstTareas" prefHeight="160"/>
+
+          <HBox spacing="8">
+            <Button text="Quitar seleccionada" onAction="#onQuitarTarea"/>
+            <Button text="Limpiar tareas" onAction="#onLimpiarTareas"/>
+            <Button text="Ejecutar misión" onAction="#onEjecutarMision"
+                    style="-fx-font-weight: bold;"/>
+          </HBox>
+
+          <Label text="Resultados"/>
+          <TextArea fx:id="txtResultadosMision" editable="false" wrapText="true" prefRowCount="8"
+                    promptText="Aquí aparecen los resultados de la misión."/>
+        </VBox>
+      </ScrollPane>
+    </Tab>
 
   </TabPane>
 </VBox>
