@@ -1,16 +1,14 @@
 package co.edu.poli.sw2Hexagonal.aplicacion.mediator.components;
 
-import co.edu.poli.sw2Hexagonal.aplicacion.mediator.DroneMediator;
-import co.edu.poli.sw2Hexagonal.aplicacion.mediator.DroneMediator.Evento;
-
 /**
  * Componente del patrón Mediator: sistema de batería.
  * <p>
  * Verifica que la batería disponible alcance para ir y volver de la zona de
- * vigilancia, conservando una reserva de seguridad.
+ * vigilancia, conservando una reserva de seguridad. No conoce a los demás
+ * componentes; lo coordina el mediador.
  * </p>
  */
-public class BatterySystem extends DroneMediator.Componente {
+public class BatterySystem {
 
     /** Consumo de batería por kilómetro recorrido, en %. */
     public static final double CONSUMO_POR_KM = 1.0;
@@ -19,31 +17,37 @@ public class BatterySystem extends DroneMediator.Componente {
     public static final double RESERVA = 20.0;
 
     /**
-     * Verifica la disponibilidad energética para la misión.
-     * Requerido = distancia × 2 (ida y vuelta) × consumo por km + reserva.
+     * Calcula la batería requerida: distancia × 2 (ida y vuelta) × consumo
+     * por km + reserva.
      *
-     * @param distanciaKm        distancia hasta la zona, en km
-     * @param bateriaDisponible  batería disponible, en %
+     * @param distanciaKm distancia hasta la zona, en km
+     * @return batería requerida, en %
      */
-    public void verificarDisponibilidad(double distanciaKm, double bateriaDisponible) {
-        double requerida = distanciaKm * 2 * CONSUMO_POR_KM + RESERVA;
-
-        if (bateriaDisponible >= requerida) {
-            notificar(Evento.BATERIA_SUFICIENTE, String.format(
-                    "Batería suficiente: %.0f%% disponible, %.0f%% requerido (ida y vuelta + %.0f%% de reserva)",
-                    bateriaDisponible, requerida, RESERVA));
-        } else {
-            notificar(Evento.BATERIA_INSUFICIENTE, String.format(
-                    "Batería insuficiente: %.0f%% disponible, %.0f%% requerido (ida y vuelta + %.0f%% de reserva)",
-                    bateriaDisponible, requerida, RESERVA));
-        }
+    public double calcularRequerida(double distanciaKm) {
+        return distanciaKm * 2 * CONSUMO_POR_KM + RESERVA;
     }
 
     /**
-     * {@inheritDoc}
+     * Indica si la batería alcanza para la misión.
+     *
+     * @param distanciaKm       distancia hasta la zona, en km
+     * @param bateriaDisponible batería disponible, en %
+     * @return {@code true} si la batería es suficiente
      */
-    @Override
-    public String getNombre() {
-        return "Batería";
+    public boolean esSuficiente(double distanciaKm, double bateriaDisponible) {
+        return bateriaDisponible >= calcularRequerida(distanciaKm);
+    }
+
+    /**
+     * Describe el resultado de la verificación energética.
+     *
+     * @param distanciaKm       distancia hasta la zona, en km
+     * @param bateriaDisponible batería disponible, en %
+     * @return descripción de la verificación
+     */
+    public String describirVerificacion(double distanciaKm, double bateriaDisponible) {
+        String estado = esSuficiente(distanciaKm, bateriaDisponible) ? "suficiente" : "insuficiente";
+        return String.format("Batería %s: %.0f%% disponible, %.0f%% requerido (ida y vuelta + %.0f%% de reserva)",
+                estado, bateriaDisponible, calcularRequerida(distanciaKm), RESERVA);
     }
 }

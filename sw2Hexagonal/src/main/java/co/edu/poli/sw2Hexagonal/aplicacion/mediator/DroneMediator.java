@@ -1,13 +1,15 @@
 package co.edu.poli.sw2Hexagonal.aplicacion.mediator;
 
+import java.util.List;
+
 /**
  * Interfaz Mediator del patrón Mediator para coordinar una operación de
  * vigilancia con drones.
  * <p>
- * Los componentes de la operación (navegación, sensores, batería y
- * comunicación) no se comunican directamente entre sí: cada uno informa al
- * mediador lo que hizo mediante un {@link Evento}, y el mediador decide qué
- * componente debe actuar a continuación.
+ * El mediador es el único que conoce a los componentes de la operación
+ * (navegación, sensores, batería y comunicación). Los componentes no se
+ * comunican entre sí: el mediador los llama en orden y controla las
+ * condiciones necesarias para iniciar la misión.
  * </p>
  *
  * @see MissionCoordinator
@@ -15,74 +17,18 @@ package co.edu.poli.sw2Hexagonal.aplicacion.mediator;
 public interface DroneMediator {
 
     /**
-     * Eventos que los componentes reportan al mediador.
-     */
-    enum Evento {
-        /** La ruta del dron quedó preparada. */
-        RUTA_PREPARADA,
-        /** La ruta fue cancelada. */
-        RUTA_CANCELADA,
-        /** La batería alcanza para la misión. */
-        BATERIA_SUFICIENTE,
-        /** La batería no alcanza para la misión. */
-        BATERIA_INSUFICIENTE,
-        /** Los sensores quedaron activos. */
-        SENSORES_ACTIVADOS,
-        /** Los sensores fueron desactivados. */
-        SENSORES_DESACTIVADOS,
-        /** El enlace de comunicación quedó establecido. */
-        ENLACE_ESTABLECIDO,
-        /** No se pudo establecer el enlace de comunicación. */
-        ENLACE_FALLIDO
-    }
-
-    /**
-     * Clase base de los componentes (colegas) del patrón Mediator.
-     * <p>
-     * Cada componente conoce únicamente al mediador, nunca a los demás
-     * componentes.
-     * </p>
-     */
-    abstract class Componente {
-
-        /** Mediador al que el componente reporta sus eventos. */
-        private DroneMediator mediador;
-
-        /**
-         * Asigna el mediador del componente.
-         *
-         * @param mediador mediador que coordinará al componente
-         */
-        public void setMediador(DroneMediator mediador) {
-            this.mediador = mediador;
-        }
-
-        /**
-         * Informa un evento al mediador.
-         *
-         * @param evento  evento ocurrido
-         * @param detalle descripción de lo ocurrido
-         * @throws IllegalStateException si el componente no tiene mediador
-         */
-        protected void notificar(Evento evento, String detalle) {
-            if (mediador == null) {
-                throw new IllegalStateException(getNombre() + " no tiene un mediador asignado");
-            }
-            mediador.notificar(this, evento, detalle);
-        }
-
-        /**
-         * @return nombre del componente, usado en la bitácora
-         */
-        public abstract String getNombre();
-    }
-
-    /**
-     * Recibe un evento de un componente y coordina la reacción de los demás.
+     * Coordina el inicio de una operación de vigilancia.
      *
-     * @param emisor  componente que generó el evento
-     * @param evento  evento ocurrido
-     * @param detalle descripción de lo ocurrido
+     * @param codigoDron        código del dron
+     * @param zona              zona de vigilancia
+     * @param distanciaKm       distancia hasta la zona, en km
+     * @param bateriaDisponible batería disponible, en %
+     * @return {@code true} si la misión quedó iniciada
      */
-    void notificar(Componente emisor, Evento evento, String detalle);
+    boolean iniciarMision(String codigoDron, String zona, double distanciaKm, double bateriaDisponible);
+
+    /**
+     * @return registro de todo lo ocurrido en la última operación, en orden
+     */
+    List<String> getBitacora();
 }
