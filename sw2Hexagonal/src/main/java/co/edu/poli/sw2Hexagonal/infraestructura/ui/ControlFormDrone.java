@@ -9,6 +9,7 @@ import co.edu.poli.sw2Hexagonal.aplicacion.observer.ConsoleObserver;
 import co.edu.poli.sw2Hexagonal.aplicacion.observer.DashboardObserver;
 import co.edu.poli.sw2Hexagonal.aplicacion.observer.FlightStatusObserver;
 import co.edu.poli.sw2Hexagonal.aplicacion.observer.LoggerObserver;
+import co.edu.poli.sw2Hexagonal.aplicacion.port.in.ExecuteMissionCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.CalcularConsumoCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.CrearDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.EliminarDroneCasosDeUso;
@@ -68,7 +69,7 @@ import javafx.util.StringConverter;
  * Adaptador de entrada: controlador JavaFX del formulario de drones
  * ({@code formDrone.fxml}).
  * <p>
- * La vista tiene cuatro pestañas independientes:
+ * La vista tiene cinco pestañas independientes:
  * </p>
  * <ul>
  *   <li><b>Drones</b>: CRUD de drones y patrón <b>Observer</b>. Permite
@@ -84,6 +85,10 @@ import javafx.util.StringConverter;
  *       la estrategia de consumo seleccionada.</li>
  *   <li><b>Misión</b>: patrón <b>Command</b>. Programa una secuencia de
  *       tareas para un dron y las ejecuta en el orden registrado.</li>
+ *   <li><b>Operación de vigilancia</b>: patrón <b>Mediator</b>. Coordina
+ *       navegación, sensores, batería y comunicación para iniciar una misión.
+ *       El dron se elige de la lista ya cargada; el caso de uso no invoca
+ *       operaciones CRUD.</li>
  * </ul>
  * <p>
  * Las consultas a las APIs se ejecutan en un hilo aparte ({@link Task}) para
@@ -95,6 +100,7 @@ import javafx.util.StringConverter;
  * @see WeatherHandler
  * @see CalcularConsumoCasosDeUso
  * @see ProgramadorTareas
+ * @see ExecuteMissionCasosDeUso
  */
 public class ControlFormDrone {
 
@@ -202,6 +208,21 @@ public class ControlFormDrone {
     /** Muestra los resultados de la misión. */
     @FXML private TextArea txtResultadosMision;
 
+    // ===== Mediator (Operación de vigilancia) =====
+
+    /** Selector del dron de la operación (lista ya cargada, sin CRUD). */
+    @FXML private ComboBox<Drone> cmbDroneVigilancia;
+    /** Zona de vigilancia. */
+    @FXML private TextField txtZonaVigilancia;
+    /** Distancia hasta la zona, en km. */
+    @FXML private TextField txtDistanciaVigilancia;
+    /** Batería disponible, en %. */
+    @FXML private TextField txtBateriaVigilancia;
+    /** Muestra si la misión se inició o se abortó. */
+    @FXML private Label lblEstadoVigilancia;
+    /** Muestra la bitácora del coordinador. */
+    @FXML private TextArea txtBitacoraVigilancia;
+
     // ===== Casos de uso CRUD =====
 
     /** Caso de uso para crear drones. */
@@ -259,10 +280,15 @@ public class ControlFormDrone {
     /** Receiver del dron seleccionado para la misión. */
     private DroneOperacionServicio operacion;
 
+    // ===== Operación de vigilancia =====
+
+    /** Caso de uso que coordina la operación mediante el patrón Mediator. */
+    private ExecuteMissionCasosDeUso executeMission;
+
     /**
      * Inicializa la vista después de cargar el FXML: configura el combo de
      * tipos, las columnas de la tabla, el listener de selección y las
-     * pestañas de Observer, consumo energético y misión.
+     * pestañas de Observer, consumo energético, misión y vigilancia.
      */
     @FXML
     private void initialize() {
@@ -287,6 +313,7 @@ public class ControlFormDrone {
         inicializarObserver();
         inicializarConsumo();
         inicializarMision();
+        cmbDroneVigilancia.setConverter(crearConverterDrone());
     }
 
     /**
@@ -318,6 +345,15 @@ public class ControlFormDrone {
      */
     public void setCalcularConsumo(CalcularConsumoCasosDeUso calcularConsumo) {
         this.calcularConsumo = calcularConsumo;
+    }
+
+    /**
+     * Inyecta el caso de uso de la operación de vigilancia desde {@code App}.
+     *
+     * @param executeMission caso de uso del patrón Mediator
+     */
+    public void setExecuteMission(ExecuteMissionCasosDeUso executeMission) {
+        this.executeMission = executeMission;
     }
 
     /**
@@ -851,6 +887,61 @@ public class ControlFormDrone {
         lstTareas.setItems(FXCollections.observableArrayList(textos));
     }
 
+    // ================= Mediator =================
+
+    /**
+     * Lee los datos de la operación, pide al caso de uso que la coordine y
+     * muestra el estado final y la bitácora del coordinador. El dron se toma
+     * de la lista ya cargada; el caso de uso solo recibe su código.
+     */
+    @FXML
+    private void onIniciarVigilancia() {
+        Drone drone = cmbDroneVigilancia.getValue();
+        if (drone == null) {
+            mostrar(AlertType.WARNING, "Seleccione un dron.");
+            return;
+        }
+
+        try {
+            double distancia = leerNumero(txtDistanciaVigilancia, "La distancia");
+            double bateria = leerNumero(txtBateriaVigilancia, "La batería");
+
+            ExecuteMissionCasosDeUso.Resultado resultado = executeMission.ejecutar(
+                    drone.getId(),
+                    txtZonaVigilancia.getText(),
+                    distancia,
+                    bateria);
+
+            if (resultado.iniciada()) {
+                lblEstadoVigilancia.setText("✔ MISIÓN INICIADA");
+                lblEstadoVigilancia.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #2e7d32;");
+            } else {
+                lblEstadoVigilancia.setText("✘ MISIÓN ABORTADA");
+                lblEstadoVigilancia.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #c62828;");
+            }
+            txtBitacoraVigilancia.setText(String.join("\n", resultado.bitacora()));
+        } catch (Exception e) {
+            mostrar(AlertType.WARNING, e.getMessage());
+        }
+    }
+
+    /**
+     * Convierte el texto de un campo en número, aceptando coma o punto
+     * decimal.
+     *
+     * @param campo  campo de texto
+     * @param nombre nombre del dato, para el mensaje de error
+     * @return valor numérico
+     * @throws IllegalArgumentException si el texto no es un número válido
+     */
+    private double leerNumero(TextField campo, String nombre) {
+        try {
+            return Double.parseDouble(campo.getText().trim().replace(',', '.'));
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(nombre + " debe ser un número válido.");
+        }
+    }
+
     // ---------- Métodos auxiliares ----------
 
     /**
@@ -895,7 +986,8 @@ public class ControlFormDrone {
 
     /**
      * Recarga la tabla con todos los drones de la base de datos y actualiza
-     * los selectores de drones de las pestañas de consumo y misión.
+     * los selectores de drones de las pestañas de consumo, misión y
+     * vigilancia.
      */
     private void cargarTabla() {
         try {
@@ -903,6 +995,7 @@ public class ControlFormDrone {
             tblDrones.setItems(FXCollections.observableArrayList(drones));
             cmbDroneConsumo.setItems(tblDrones.getItems());
             cmbDroneMision.setItems(tblDrones.getItems());
+            cmbDroneVigilancia.setItems(tblDrones.getItems());
         } catch (Exception e) {
             mostrar(AlertType.ERROR, e.getMessage());
         }

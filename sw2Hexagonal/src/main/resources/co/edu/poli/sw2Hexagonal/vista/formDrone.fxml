@@ -221,6 +221,44 @@
         </VBox>
       </ScrollPane>
     </Tab>
+    
+            <!-- ================= Pestaña 5: Operación de vigilancia (Mediator) ================= -->
+    <Tab text="Operación de vigilancia">
+      <ScrollPane fitToWidth="true">
+        <VBox spacing="12">
+          <padding>
+            <Insets top="16" right="16" bottom="16" left="16"/>
+          </padding>
+
+          <GridPane hgap="10" vgap="8">
+            <Label text="Dron" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+            <ComboBox fx:id="cmbDroneVigilancia" prefWidth="320"
+                      GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+            <Label text="Zona de vigilancia" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+            <TextField fx:id="txtZonaVigilancia" promptText="Ej: Parque Simón Bolívar" prefWidth="320"
+                       GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+            <Label text="Distancia (km)" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+            <TextField fx:id="txtDistanciaVigilancia" promptText="Ej: 5" prefWidth="320"
+                       GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+
+            <Label text="Batería disponible (%)" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+            <TextField fx:id="txtBateriaVigilancia" promptText="Ej: 80" prefWidth="320"
+                       GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+          </GridPane>
+
+          <Button text="Iniciar operación" onAction="#onIniciarVigilancia"
+                  style="-fx-font-weight: bold;"/>
+
+          <Label fx:id="lblEstadoVigilancia" style="-fx-font-size: 14px; -fx-font-weight: bold;"/>
+
+          <Label text="Bitácora del coordinador"/>
+          <TextArea fx:id="txtBitacoraVigilancia" editable="false" wrapText="true" prefRowCount="12"
+                    promptText="Aquí aparece la secuencia coordinada por el mediador."/>
+        </VBox>
+      </ScrollPane>
+    </Tab>
 
   </TabPane>
 </VBox>

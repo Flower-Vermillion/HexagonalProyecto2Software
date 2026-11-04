@@ -1,5 +1,6 @@
 package co.edu.poli.sw2Hexagonal.vista;
 
+import co.edu.poli.sw2Hexagonal.aplicacion.port.in.ExecuteMissionCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.CalcularConsumoCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.CrearDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.EliminarDroneCasosDeUso;
@@ -10,6 +11,7 @@ import co.edu.poli.sw2Hexagonal.aplicacion.servicio.CrearDroneServicio;
 import co.edu.poli.sw2Hexagonal.aplicacion.servicio.EliminarDroneServicio;
 import co.edu.poli.sw2Hexagonal.aplicacion.servicio.LeerTodosDroneServicio;
 import co.edu.poli.sw2Hexagonal.aplicacion.servicio.LeerUnoDroneServicio;
+import co.edu.poli.sw2Hexagonal.aplicacion.servicio.MissionServicio;
 import co.edu.poli.sw2Hexagonal.aplicacion.servicio.ModificarDroneServicio;
 import co.edu.poli.sw2Hexagonal.infraestructura.persistencia.MySqlDroneRepository;
 import co.edu.poli.sw2Hexagonal.infraestructura.ui.ControlFormDrone;
@@ -36,11 +38,14 @@ import javafx.stage.Stage;
  *                          →  EliminarDroneServicio
  *   HaversineUtil          →  CalcularConsumoCasosDeUso  →  ControlFormDrone
  *                             (Context del patrón Strategy)
+ *                             MissionServicio            →  ControlFormDrone
+ *                             (patrón Mediator, sin CRUD)
  * </pre>
  *
  * @see ControlFormDrone
  * @see MySqlDroneRepository
  * @see CalcularConsumoCasosDeUso
+ * @see MissionServicio
  */
 public class App extends Application {
 
@@ -75,18 +80,22 @@ public class App extends Application {
         // 3. Crear el Context del patrón Strategy con el cálculo de Haversine
         CalcularConsumoCasosDeUso consumoUC = new CalcularConsumoCasosDeUso(HaversineUtil::distanciaKm);
 
-        // 4. Cargar la vista FXML y obtener el controlador
+        // 4. Crear el caso de uso del patrón Mediator (no usa el repositorio)
+        ExecuteMissionCasosDeUso missionUC = new MissionServicio();
+
+        // 5. Cargar la vista FXML y obtener el controlador
         FXMLLoader loader = new FXMLLoader(
                 getClass().getResource("/co/edu/poli/sw2Hexagonal/vista/formDrone.fxml"));
         Parent root = loader.load();
 
-        // 5. Inyectar los casos de uso en el adaptador de entrada (UI)
+        // 6. Inyectar los casos de uso en el adaptador de entrada (UI)
         ControlFormDrone controlador = loader.getController();
         controlador.setUseCases(crearUC, leerUnoUC, leerTodosUC, modificarUC, eliminarUC);
         controlador.setCalcularConsumo(consumoUC);
+        controlador.setExecuteMission(missionUC);
         controlador.cargarDrones();
 
-        // 6. Mostrar la ventana
+        // 7. Mostrar la ventana
         stage.setTitle("Gestión de Drones");
         stage.setScene(new Scene(root));
         stage.show();

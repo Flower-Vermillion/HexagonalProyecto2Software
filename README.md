@@ -389,6 +389,277 @@ Para incluir también los miembros privados:
 mvn javadoc:javadoc -Dshow=private
 ```
 
+## Consumo energético: patrón Strategy
+
+Esta sección documenta el patrón **Strategy**, que estima la batería que requiere un dron para recorrer una ruta. El origen y el destino de la ruta se cargan desde un archivo JSON. La batería se calcula con una de tres estrategias de consumo energético, que se pueden cambiar en tiempo de ejecución.
+
+El cálculo se hace en memoria y no se guarda en la base de datos. Por eso no hay un servicio con repositorio: el caso de uso `CalcularConsumoCasosDeUso` cumple directamente el rol de **Context**.
+
+---
+
+### Ciclo de uso
+
+1. Seleccionar un dron.
+2. Cargar la ruta desde un archivo JSON.
+3. Seleccionar una estrategia de consumo energético.
+4. Visualizar en pantalla la distancia entre origen y destino, la estrategia seleccionada y el cálculo.
+
+---
+
+### Estrategias
+
+| Estrategia | Clase | Descripción | Fórmula |
+|---|---|---|---|
+| Modo Ahorro | `AhorroStrategy` | Minimiza el consumo de batería | distancia (km) × 0.5 |
+| Modo Normal | `NormalStrategy` | Consumo estándar | distancia (km) × 1 |
+| Modo Alto Rendimiento | `AltoRendimientoStrategy` | Aumenta la velocidad sacrificando batería | distancia (km) × 1.5 |
+
+---
+
+### Roles del patrón
+
+| Rol | Clase | Paquete |
+|---|---|---|
+| Strategy (interfaz) | `ConsumoStrategy` | `dominio.modelo.strategy` |
+| Estrategias concretas | `AhorroStrategy`, `NormalStrategy`, `AltoRendimientoStrategy` | `dominio.modelo.strategy` |
+| Context | `CalcularConsumoCasosDeUso` | `aplicacion.puerto.entrada` |
+| Cliente | `ControlFormDrone` | `infraestructura.ui` |
+
+La interfaz `ConsumoStrategy` define tres métodos:
+
+| Método | Descripción |
+|---|---|
+| `calcularConsumo(double distanciaKm)` | Devuelve la batería requerida para esa distancia. |
+| `getNombre()` | Devuelve el nombre de la estrategia, por ejemplo "Modo Ahorro". |
+| `getFactor()` | Devuelve el factor que se multiplica por la distancia. |
+
+El Context guarda la estrategia seleccionada con `setEstrategia(...)` y le delega el cálculo con `calcularConsumo(...)`. Para agregar una estrategia nueva basta con crear otra clase que implemente `ConsumoStrategy`; el Context no se modifica.
+
+---
+
+### Ubicación en la arquitectura hexagonal
+
+```
+dominio
+└── modelo
+    └── strategy
+        ├── PuntoGeografico            (punto con nombre, latitud y longitud)
+        ├── ConsumoStrategy            (interfaz Strategy)
+        ├── AhorroStrategy
+        ├── NormalStrategy
+        └── AltoRendimientoStrategy
+
+aplicacion
+└── puerto
+    └── entrada
+        └── CalcularConsumoCasosDeUso  (Context)
+
+infraestructura
+├── loader
+│   └── JsonRutaLoader                 (lee origen y destino desde JSON)
+├── util
+│   └── HaversineUtil                  (distancia entre coordenadas)
+└── ui
+    └── ControlFormDrone               (pestaña "Consumo energético")
+```
+
+Para que la capa de aplicación no dependa de la infraestructura, `CalcularConsumoCasosDeUso` define una interfaz funcional anidada, `CalculadoraDistancia`. En `App` se le pasa la implementación de Haversine:
+
+```java
+CalcularConsumoCasosDeUso consumoUC = new CalcularConsumoCasosDeUso(HaversineUtil::distanciaKm);
+controlador.setCalcularConsumo(consumoUC);
+```
+
+---
+
+### Archivo de ruta (JSON)
+
+El archivo `ruta.json` está en la raíz del proyecto, al mismo nivel que el `pom.xml`. Tiene este formato:
+
+```json
+{
+  "origen": {
+    "nombre": "Punto Origen",
+    "latitud": 4.60971,
+    "longitud": -74.08175
+  },
+  "destino": {
+    "nombre": "Punto Destino",
+    "latitud": 4.70159,
+    "longitud": -74.14690
+  }
+}
+```
+
+`JsonRutaLoader` lee el archivo y crea dos objetos `PuntoGeografico`. Valida que existan `origen` y `destino`, que cada uno tenga `latitud` y `longitud`, y que las coordenadas estén en rango (latitud entre -90 y 90, longitud entre -180 y 180). No requiere dependencias adicionales en el `pom.xml`.
+
+Se pueden crear más rutas con otros nombres (por ejemplo `ruta_larga.json`) manteniendo la misma estructura.
+
+---
+
+### Cálculo de la distancia
+
+`HaversineUtil` calcula la distancia en kilómetros entre dos coordenadas con la **fórmula de Haversine**, que tiene en cuenta la curvatura de la Tierra (radio medio de 6371 km).
+
+---
+
+### Flujo del cálculo
+
+```
+ControlFormDrone.onCargarRuta()
+  └─ JsonRutaLoader.cargar(archivo)  →  origen y destino (PuntoGeografico)
+
+ControlFormDrone.onCalcularConsumo()
+  ├─ CalcularConsumoCasosDeUso.setEstrategia(estrategia)
+  ├─ CalcularConsumoCasosDeUso.calcularDistanciaKm(origen, destino)
+  │    └─ HaversineUtil.distanciaKm(origen, destino)
+  └─ CalcularConsumoCasosDeUso.calcularConsumo(distancia)
+       └─ estrategia.calcularConsumo(distancia)
+```
+
+---
+
+### Ejemplo de resultados
+
+Con la ruta de ejemplo la distancia es de aproximadamente **12.51 km**:
+
+| Estrategia | Cálculo | Batería requerida |
+|---|---|---|
+| Modo Ahorro | 12.51 km × 0.5 | ≈ 6.26 |
+| Modo Normal | 12.51 km × 1.0 | ≈ 12.51 |
+| Modo Alto Rendimiento | 12.51 km × 1.5 | ≈ 18.77 |
+
+---
+
+### Cómo probarlo en la interfaz
+
+1. Abre la pestaña **Consumo energético**.
+2. Selecciona un dron.
+3. Presiona **Cargar ruta (JSON)**. El selector se abre en la carpeta del proyecto; elige `ruta.json`.
+4. Selecciona una estrategia y presiona **Calcular consumo**.
+5. Se muestran el dron, la distancia, la estrategia, la operación realizada y la batería requerida.
+6. Cambia de estrategia y vuelve a calcular. La distancia es la misma y solo cambia el factor: así se ve el intercambio de estrategias en tiempo de ejecución.
+
+## Misión del dron: patrón Command
+
+Esta sección documenta el patrón **Command**, que permite programar, antes de iniciar una operación, la secuencia de tareas que un dron ejecutará durante una misión. Cada tarea se encapsula en un objeto independiente. Una vez programadas, el sistema las ejecuta en el orden registrado y muestra los resultados.
+
+Las tareas y sus resultados se manejan en memoria y no se guardan en la base de datos.
+
+---
+
+### Comandos disponibles
+
+| Tarea | Clase | Resultado |
+|---|---|---|
+| Tomar fotografía | `TomarFotografiaCommand` | Nombre del archivo de la foto capturada |
+| Escanear zona | `EscanearZonaCommand` | Área escaneada (km²) y objetos detectados |
+| Medir temperatura | `MedirTemperaturaCommand` | Temperatura ambiente (°C) |
+
+Como el sistema no tiene sensores reales, los resultados son **simulados**: el nombre de la foto incluye el id del dron y la hora de captura, el área escaneada está entre 0.5 y 2 km² con hasta 10 objetos, y la temperatura está entre 10 °C y 30 °C.
+
+---
+
+### Roles del patrón
+
+| Rol | Clase | Paquete |
+|---|---|---|
+| Command (interfaz) | `DroneCommand` | `dominio.modelo.command` |
+| Comandos concretos | `TomarFotografiaCommand`, `EscanearZonaCommand`, `MedirTemperaturaCommand` | `dominio.modelo.command` |
+| Receiver / Wrapper | `DroneOperacionServicio` | `aplicacion.servicio` |
+| Invoker | `ProgramadorTareas` | `aplicacion.servicio` |
+| Cliente | `ControlFormDrone` | `infraestructura.ui` |
+
+#### `DroneCommand` (Command)
+
+| Método | Descripción |
+|---|---|
+| `ejecutar()` | Ejecuta la tarea delegando en el Receiver y devuelve el resultado. |
+| `getNombre()` | Devuelve el nombre de la tarea, por ejemplo "Tomar fotografía". |
+
+#### `DroneOperacionServicio` (Receiver / Wrapper)
+
+La clase `Drone` no tiene operaciones de misión y no se modifica. `DroneOperacionServicio` **envuelve** un `Drone` (lo recibe en el constructor) y le agrega desde afuera las operaciones `tomarFotografia()`, `escanearZona()` y `medirTemperatura()`. Es además el **Receiver**: los comandos no hacen el trabajo, se lo delegan a él.
+
+#### `ProgramadorTareas` (Invoker)
+
+Guarda la secuencia de comandos y los ejecuta en el orden en que se registraron. No sabe qué hace cada tarea ni qué dron la realiza: solo llama a `ejecutar()`.
+
+| Método | Descripción |
+|---|---|
+| `programar(DroneCommand)` | Agrega una tarea al final de la secuencia. |
+| `eliminar(int)` | Quita la tarea de una posición. |
+| `limpiar()` | Elimina todas las tareas. |
+| `getTareas()` | Devuelve las tareas programadas, en orden. |
+| `ejecutarMision()` | Ejecuta todas las tareas en orden y devuelve los resultados numerados. Si una tarea falla, registra el error y continúa con la siguiente. |
+
+---
+
+### Ubicación en la arquitectura hexagonal
+
+```
+dominio
+└── modelo
+    ├── Drone                            (no se modificó)
+    └── command
+        ├── DroneCommand                 (interfaz Command + interfaz anidada Receptor)
+        ├── TomarFotografiaCommand
+        ├── EscanearZonaCommand
+        └── MedirTemperaturaCommand
+
+aplicacion
+└── servicio
+    ├── DroneOperacionServicio           (Receiver / Wrapper)
+    └── ProgramadorTareas                (Invoker)
+
+infraestructura
+└── ui
+    └── ControlFormDrone                 (pestaña "Misión")
+```
+
+Los comandos están en el dominio y el Receiver en la capa de aplicación. Para que el dominio no dependa de la aplicación, `DroneCommand` define una **interfaz anidada `Receptor`** con las operaciones que necesitan los comandos, y `DroneOperacionServicio` la implementa. Así los comandos solo conocen esa interfaz del dominio y las dependencias apuntan hacia adentro.
+
+---
+
+### Flujo de una misión
+
+```
+ControlFormDrone (Cliente)
+  ├─ new DroneOperacionServicio(drone)          → Wrapper / Receiver del dron
+  ├─ new TomarFotografiaCommand(operacion)      → Command concreto
+  ├─ programador.programar(comando)             → el Invoker guarda la tarea
+  └─ programador.ejecutarMision()               → el Invoker ejecuta en orden
+        └─ comando.ejecutar()
+              └─ operacion.tomarFotografia()    → el Wrapper realiza la operación
+```
+
+---
+
+### Ejemplo de resultados
+
+Misión programada: Escanear zona → Tomar fotografía → Medir temperatura.
+
+```
+Misión del dron D01 - Phantom 4 (VIGILANCIA)
+
+1. Escanear zona → Zona escaneada: 1.37 km², 4 objeto(s) detectado(s)
+2. Tomar fotografía → Fotografía capturada: IMG_D01_152310.jpg
+3. Medir temperatura → Temperatura medida: 21.6 °C
+```
+
+Los valores cambian en cada ejecución porque son simulados.
+
+---
+
+### Cómo probarlo en la interfaz
+
+1. Abre la pestaña **Misión** y selecciona un dron.
+2. Agrega tareas con los botones **Tomar fotografía**, **Escanear zona** y **Medir temperatura**, en el orden que quieras. Se pueden repetir.
+3. Si te equivocas, selecciona una tarea en la lista y presiona **Quitar seleccionada**, o usa **Limpiar tareas** para empezar de nuevo.
+4. Presiona **Ejecutar misión**. Los resultados aparecen numerados en el mismo orden en que se programaron las tareas.
+
+Si cambias de dron, la secuencia se reinicia, porque los comandos programados apuntan al Receiver del dron anterior.
+
 ## Autor
 
 [Flower-Vermillion](https://github.com/Flower-Vermillion) — Proyecto 2, Software 2.
