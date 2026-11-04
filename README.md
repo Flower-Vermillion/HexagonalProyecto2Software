@@ -660,6 +660,155 @@ Los valores cambian en cada ejecución porque son simulados.
 
 Si cambias de dron, la secuencia se reinicia, porque los comandos programados apuntan al Receiver del dron anterior.
 
+## Operación de vigilancia: patrón Mediator
+
+Esta sección documenta el patrón **Mediator**, que centraliza la coordinación entre los componentes que intervienen al iniciar una operación de vigilancia con un dron. Los componentes no se comunican entre sí: un coordinador los llama en orden y controla las condiciones necesarias para iniciar la misión.
+
+Esta funcionalidad **no usa las operaciones CRUD de drones**. La interfaz permite elegir un dron de la lista que ya cargó la pestaña Drones, pero el caso de uso del Mediator solo recibe su código y no conoce el repositorio.
+
+El Mediator está en la **capa de aplicación**, porque su responsabilidad es coordinar varios servicios para ejecutar una misión.
+
+---
+
+### Componentes coordinados
+
+| Componente | Clase | Responsabilidad |
+|---|---|---|
+| Sistema de navegación | `NavigationSystem` | Prepara la ruta del dron hacia la zona de vigilancia. |
+| Sistema de batería | `BatterySystem` | Verifica la disponibilidad energética. |
+| Sistema de sensores | `SensorSystem` | Activa los sensores de vigilancia (cámara HD, cámara infrarroja, detector de movimiento). |
+| Sistema de comunicación | `CommunicationSystem` | Establece el enlace con la estación de control. |
+| Coordinador de misión | `MissionCoordinator` | Centraliza y controla la secuencia de ejecución. |
+
+---
+
+### Roles del patrón
+
+| Rol | Clase | Paquete |
+|---|---|---|
+| Mediator (interfaz) | `DroneMediator` | `aplicacion.mediator` |
+| Mediador concreto | `MissionCoordinator` | `aplicacion.mediator` |
+| Componentes | `NavigationSystem`, `BatterySystem`, `SensorSystem`, `CommunicationSystem` | `aplicacion.mediator.components` |
+| Puerto de entrada | `ExecuteMissionCasosDeUso` | `aplicacion.port.in` |
+| Caso de uso | `MissionServicio` | `aplicacion.servicio` |
+| Cliente | `ControlFormDrone` | `infraestructura.ui` |
+
+#### `DroneMediator`
+
+| Método | Descripción |
+|---|---|
+| `iniciarMision(codigoDron, zona, distanciaKm, bateriaDisponible)` | Coordina la secuencia y devuelve `true` si la misión quedó iniciada. |
+| `getBitacora()` | Devuelve el registro de todo lo ocurrido, en orden. |
+
+`MissionCoordinator` es el **único** que tiene referencias a los cuatro componentes. Los componentes son clases independientes: hacen su trabajo y devuelven el resultado, sin ningún atributo que apunte a otro componente. Por eso no pueden comunicarse entre sí, y toda la interacción pasa por el coordinador.
+
+---
+
+### Secuencia de la operación
+
+```
+MissionCoordinator.iniciarMision(...)
+  1. NavigationSystem.prepararRuta()          → ruta preparada
+  2. BatterySystem.esSuficiente()             → ¿alcanza la batería?
+       └─ no → abortar: cancelar ruta
+  3. SensorSystem.activar()                   → sensores activos
+  4. CommunicationSystem.estaEnAlcance()      → ¿hay enlace?
+       └─ no → abortar: desactivar sensores y cancelar ruta
+  ✔ MISIÓN INICIADA
+```
+
+### Condiciones para iniciar la misión
+
+| Condición | Componente | Regla |
+|---|---|---|
+| Batería suficiente | `BatterySystem` | Batería disponible ≥ distancia × 2 (ida y vuelta, 1 % por km) + 20 % de reserva |
+| Enlace de comunicación | `CommunicationSystem` | Distancia a la zona ≤ 15 km |
+
+Si alguna condición falla, el coordinador **aborta** la misión: desactiva los sensores (si ya estaban activos) y cancela la ruta.
+
+---
+
+### Ubicación en la arquitectura hexagonal
+
+```
+aplicacion
+├── port
+│   └── in
+│       └── ExecuteMissionCasosDeUso       (puerto de entrada)
+├── mediator
+│   ├── DroneMediator                      (interfaz Mediator)
+│   ├── MissionCoordinator                 (mediador concreto)
+│   └── components
+│       ├── NavigationSystem
+│       ├── SensorSystem
+│       ├── BatterySystem
+│       └── CommunicationSystem
+└── servicio
+    └── MissionServicio                    (implementa el caso de uso)
+
+infraestructura
+└── ui
+    └── ControlFormDrone                   (pestaña "Operación de vigilancia")
+```
+
+`MissionServicio` valida los datos, crea el coordinador con sus componentes y le pide iniciar la misión. En `App` se inyecta en el controlador:
+
+```java
+ExecuteMissionCasosDeUso missionUC = new MissionServicio();
+controlador.setExecuteMission(missionUC);
+```
+
+---
+
+### Ejemplo de bitácora
+
+Misión iniciada (dron D01, 5 km, 80 % de batería):
+
+```
+[Coordinador] Iniciando operación de vigilancia del dron D01 en 'Parque Simón Bolívar'
+[Navegación] Ruta hacia 'Parque Simón Bolívar' preparada: 5.0 km, 4 puntos de control
+[Batería] Batería suficiente: 80% disponible, 30% requerido (ida y vuelta + 20% de reserva)
+[Sensores] Sensores activados: cámara HD, cámara infrarroja, detector de movimiento
+[Comunicación] Enlace establecido en canal 5.8 GHz (zona a 5.0 km, alcance máximo 15 km)
+[Coordinador] ✔ MISIÓN INICIADA: todos los sistemas listos
+```
+
+Misión abortada por falta de enlace (20 km, 90 % de batería):
+
+```
+[Coordinador] Iniciando operación de vigilancia del dron D01 en 'Zona norte'
+[Navegación] Ruta hacia 'Zona norte' preparada: 20.0 km, 11 puntos de control
+[Batería] Batería suficiente: 90% disponible, 60% requerido (ida y vuelta + 20% de reserva)
+[Sensores] Sensores activados: cámara HD, cámara infrarroja, detector de movimiento
+[Comunicación] Sin enlace: la zona está a 20.0 km y el alcance máximo es 15 km
+[Sensores] Sensores desactivados
+[Navegación] Ruta cancelada
+[Coordinador] ✘ MISIÓN ABORTADA: sin enlace de comunicación
+```
+
+---
+
+### Cómo probarlo en la interfaz
+
+1. Abre la pestaña **Operación de vigilancia**.
+2. Selecciona un dron, escribe la zona, la distancia y la batería disponible.
+3. Presiona **Iniciar operación**.
+4. Se muestra si la misión se inició o se abortó, junto con la bitácora del coordinador.
+
+Casos sugeridos:
+
+| Caso | Distancia | Batería | Resultado esperado |
+|---|---|---|---|
+| Todo bien | 5 km | 80 % | ✔ Iniciada (requiere 30 %, enlace dentro de 15 km) |
+| Batería insuficiente | 10 km | 30 % | ✘ Abortada en batería (requiere 40 %); se cancela la ruta |
+| Fuera de alcance | 20 km | 90 % | ✘ Abortada en comunicación; se desactivan los sensores y se cancela la ruta |
+
+---
+
+### Cómo extenderlo
+
+Para agregar un componente nuevo (por ejemplo, un sistema de cámaras térmicas) basta con crear su clase en `aplicacion.mediator.components` y agregar el paso en `MissionCoordinator`. Ningún otro componente cambia, porque ninguno conoce a los demás.
+
 ## Autor
 
 [Flower-Vermillion](https://github.com/Flower-Vermillion) — Proyecto 2, Software 2.
