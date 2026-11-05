@@ -1,0 +1,966 @@
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/aplicacion/puerto/entrada/ManageDroneStateUseCase.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/aplicacion/puerto/entrada/ManageDroneStateUseCase.java
+new file mode 100644
+index 0000000..315c974
+--- /dev/null
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/aplicacion/puerto/entrada/ManageDroneStateUseCase.java
+@@ -0,0 +1,76 @@
++package co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada;
++
++import java.util.List;
++
++import co.edu.poli.sw2Hexagonal.dominio.modelo.Drone;
++
++/**
++ * Puerto de entrada — caso de uso: gestionar el estado operativo de un dron.
++ * <p>
++ * Las operaciones de transición devuelven el nombre del nuevo estado y lanzan
++ * {@link IllegalStateException} si el estado actual no las permite.
++ * </p>
++ */
++public interface ManageDroneStateUseCase {
++
++    /**
++     * Enciende un dron.
++     *
++     * @param drone dron a encender
++     * @return nombre del nuevo estado
++     * @throws IllegalStateException si el estado actual no lo permite
++     */
++    String encender(Drone drone);
++
++    /**
++     * Apaga un dron.
++     *
++     * @param drone dron a apagar
++     * @return nombre del nuevo estado
++     * @throws IllegalStateException si el estado actual no lo permite
++     */
++    String apagar(Drone drone);
++
++    /**
++     * Hace despegar un dron.
++     *
++     * @param drone dron que despega
++     * @return nombre del nuevo estado
++     * @throws IllegalStateException si el estado actual no lo permite
++     */
++    String despegar(Drone drone);
++
++    /**
++     * Inicia el aterrizaje de un dron.
++     *
++     * @param drone dron que aterriza
++     * @return nombre del nuevo estado
++     * @throws IllegalStateException si el estado actual no lo permite
++     */
++    String iniciarAterrizaje(Drone drone);
++
++    /**
++     * Finaliza el aterrizaje de un dron.
++     *
++     * @param drone dron que termina de aterrizar
++     * @return nombre del nuevo estado
++     * @throws IllegalStateException si el estado actual no lo permite
++     */
++    String finalizarAterrizaje(Drone drone);
++
++    /**
++     * Consulta el estado operativo de un dron.
++     *
++     * @param drone dron a consultar
++     * @return nombre del estado actual
++     */
++    String obtenerEstado(Drone drone);
++
++    /**
++     * Descarta el estado de los drones que ya no están registrados. Así, un
++     * dron nuevo creado con el id de uno eliminado inicia APAGADO.
++     *
++     * @param drones drones registrados actualmente
++     */
++    void sincronizar(List<? extends Drone> drones);
++}
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/aplicacion/servicio/DroneStateService.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/aplicacion/servicio/DroneStateService.java
+new file mode 100644
+index 0000000..e48c694
+--- /dev/null
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/aplicacion/servicio/DroneStateService.java
+@@ -0,0 +1,122 @@
++package co.edu.poli.sw2Hexagonal.aplicacion.servicio;
++
++import java.util.List;
++import java.util.Map;
++import java.util.Set;
++import java.util.concurrent.ConcurrentHashMap;
++import java.util.stream.Collectors;
++
++import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.ManageDroneStateUseCase;
++import co.edu.poli.sw2Hexagonal.dominio.modelo.Drone;
++
++/**
++ * Servicio de aplicación — implementa la gestión del estado operativo.
++ * <p>
++ * Delega cada operación en el {@link Drone} (Context del patrón State), que a
++ * su vez la delega en su estado actual. Este servicio no contiene reglas de
++ * transición.
++ * </p>
++ * <p>
++ * El estado se maneja en memoria. Como la lista de drones se reconstruye al
++ * leer de la base de datos, el servicio conserva, por {@code id}, la instancia
++ * de {@link Drone} cuyo estado se ha modificado. Al reiniciar la aplicación
++ * todos los drones vuelven a APAGADO.
++ * </p>
++ */
++public class DroneStateService implements ManageDroneStateUseCase {
++
++    /** Drones con transiciones registradas, indexados por id. */
++    private final Map<String, Drone> dronesPorId = new ConcurrentHashMap<>();
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public String encender(Drone drone) {
++        Drone contexto = contexto(drone);
++        contexto.encender();
++        return contexto.getEstado().getNombre();
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public String apagar(Drone drone) {
++        Drone contexto = contexto(drone);
++        contexto.apagar();
++        return contexto.getEstado().getNombre();
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public String despegar(Drone drone) {
++        Drone contexto = contexto(drone);
++        contexto.despegar();
++        return contexto.getEstado().getNombre();
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public String iniciarAterrizaje(Drone drone) {
++        Drone contexto = contexto(drone);
++        contexto.iniciarAterrizaje();
++        return contexto.getEstado().getNombre();
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public String finalizarAterrizaje(Drone drone) {
++        Drone contexto = contexto(drone);
++        contexto.finalizarAterrizaje();
++        return contexto.getEstado().getNombre();
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public String obtenerEstado(Drone drone) {
++        return dronesPorId.getOrDefault(clave(drone), drone).getEstado().getNombre();
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public void sincronizar(List<? extends Drone> drones) {
++        Set<String> vigentes = drones.stream().map(this::clave).collect(Collectors.toSet());
++        dronesPorId.keySet().retainAll(vigentes);
++    }
++
++    /**
++     * Obtiene la instancia que conserva el estado de un dron.
++     *
++     * @param drone dron recibido desde la interfaz
++     * @return instancia registrada para el id del dron
++     * @throws IllegalArgumentException si el dron es nulo o no tiene id
++     */
++    private Drone contexto(Drone drone) {
++        return dronesPorId.computeIfAbsent(clave(drone), id -> drone);
++    }
++
++    /**
++     * Obtiene la clave con la que se indexa un dron.
++     *
++     * @param drone dron
++     * @return id del dron
++     * @throws IllegalArgumentException si el dron es nulo o no tiene id
++     */
++    private String clave(Drone drone) {
++        if (drone == null || drone.getId() == null) {
++            throw new IllegalArgumentException("Debe seleccionar un dron");
++        }
++        return drone.getId();
++    }
++}
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/modelo/Drone.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/modelo/Drone.java
+index d959eff..5c47bd8 100644
+--- a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/modelo/Drone.java
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/modelo/Drone.java
+@@ -1,5 +1,8 @@
+ package co.edu.poli.sw2Hexagonal.dominio.modelo;
+ 
++import co.edu.poli.sw2Hexagonal.dominio.state.DroneState;
++import co.edu.poli.sw2Hexagonal.dominio.state.OffState;
++
+ public abstract class Drone {
+ 
+     protected String id;
+@@ -8,6 +11,9 @@ public abstract class Drone {
+     protected String fabricante;
+     protected double peso;
+ 
++    /** Estado operativo actual (patrón State). Todo dron nuevo inicia APAGADO. */
++    private DroneState estado = new OffState();
++
+     public Drone() {
+     }
+ 
+@@ -67,6 +73,58 @@ public abstract class Drone {
+      */
+     public abstract String getTipo();
+ 
++    /**
++     * @return estado operativo actual del dron
++     */
++    public DroneState getEstado() {
++        return estado;
++    }
++
++    /**
++     * Enciende el dron delegando en su estado actual.
++     *
++     * @throws IllegalStateException si el estado actual no lo permite
++     */
++    public void encender() {
++        estado = estado.encender();
++    }
++
++    /**
++     * Apaga el dron delegando en su estado actual.
++     *
++     * @throws IllegalStateException si el estado actual no lo permite
++     */
++    public void apagar() {
++        estado = estado.apagar();
++    }
++
++    /**
++     * Hace despegar el dron delegando en su estado actual.
++     *
++     * @throws IllegalStateException si el estado actual no lo permite
++     */
++    public void despegar() {
++        estado = estado.despegar();
++    }
++
++    /**
++     * Inicia el aterrizaje delegando en el estado actual.
++     *
++     * @throws IllegalStateException si el estado actual no lo permite
++     */
++    public void iniciarAterrizaje() {
++        estado = estado.iniciarAterrizaje();
++    }
++
++    /**
++     * Finaliza el aterrizaje delegando en el estado actual.
++     *
++     * @throws IllegalStateException si el estado actual no lo permite
++     */
++    public void finalizarAterrizaje() {
++        estado = estado.finalizarAterrizaje();
++    }
++
+     @Override
+     public String toString() {
+         return "Drone{" +
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/DroneState.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/DroneState.java
+new file mode 100644
+index 0000000..7e35cd3
+--- /dev/null
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/DroneState.java
+@@ -0,0 +1,67 @@
++package co.edu.poli.sw2Hexagonal.dominio.state;
++
++/**
++ * Interfaz State del patrón State: define las operaciones de un dron cuyo
++ * resultado depende de su estado operativo.
++ * <p>
++ * Cada operación devuelve el estado al que pasa el dron. Si la operación no
++ * está permitida en el estado actual, lanza {@link IllegalStateException} y
++ * el dron conserva su estado. Así, las transiciones válidas quedan definidas
++ * únicamente por las clases de estado.
++ * </p>
++ * <p>
++ * Ciclo operativo:
++ * </p>
++ * <pre>
++ *   APAGADO → EN ESPERA → VOLANDO → ATERRIZANDO → EN ESPERA
++ *                 ↓
++ *              APAGADO
++ * </pre>
++ */
++public interface DroneState {
++
++    /**
++     * @return nombre del estado operativo
++     */
++    String getNombre();
++
++    /**
++     * Enciende el dron.
++     *
++     * @return estado siguiente
++     * @throws IllegalStateException si la operación no está permitida
++     */
++    DroneState encender();
++
++    /**
++     * Apaga el dron.
++     *
++     * @return estado siguiente
++     * @throws IllegalStateException si la operación no está permitida
++     */
++    DroneState apagar();
++
++    /**
++     * Inicia el vuelo del dron.
++     *
++     * @return estado siguiente
++     * @throws IllegalStateException si la operación no está permitida
++     */
++    DroneState despegar();
++
++    /**
++     * Inicia el proceso de aterrizaje del dron.
++     *
++     * @return estado siguiente
++     * @throws IllegalStateException si la operación no está permitida
++     */
++    DroneState iniciarAterrizaje();
++
++    /**
++     * Finaliza el proceso de aterrizaje del dron.
++     *
++     * @return estado siguiente
++     * @throws IllegalStateException si la operación no está permitida
++     */
++    DroneState finalizarAterrizaje();
++}
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/FlyingState.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/FlyingState.java
+new file mode 100644
+index 0000000..e29655d
+--- /dev/null
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/FlyingState.java
+@@ -0,0 +1,57 @@
++package co.edu.poli.sw2Hexagonal.dominio.state;
++
++/**
++ * Estado VOLANDO: el dron está en vuelo y solo puede iniciar el aterrizaje.
++ */
++public class FlyingState implements DroneState {
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public String getNombre() {
++        return "VOLANDO";
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState encender() {
++        throw new IllegalStateException("El dron ya está encendido y en vuelo.");
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState apagar() {
++        throw new IllegalStateException("Un dron VOLANDO no puede apagarse: primero debe aterrizar.");
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState despegar() {
++        throw new IllegalStateException("El dron ya está en vuelo.");
++    }
++
++    /**
++     * Pasa el dron a ATERRIZANDO.
++     *
++     * @return estado {@link LandingState}
++     */
++    @Override
++    public DroneState iniciarAterrizaje() {
++        return new LandingState();
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState finalizarAterrizaje() {
++        throw new IllegalStateException("Un dron VOLANDO debe iniciar el aterrizaje antes de finalizarlo.");
++    }
++}
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/LandingState.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/LandingState.java
+new file mode 100644
+index 0000000..f42037c
+--- /dev/null
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/LandingState.java
+@@ -0,0 +1,58 @@
++package co.edu.poli.sw2Hexagonal.dominio.state;
++
++/**
++ * Estado ATERRIZANDO: el dron está ejecutando el aterrizaje y solo puede
++ * finalizarlo. No puede iniciar un nuevo vuelo hasta terminar.
++ */
++public class LandingState implements DroneState {
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public String getNombre() {
++        return "ATERRIZANDO";
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState encender() {
++        throw new IllegalStateException("El dron ya está encendido y aterrizando.");
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState apagar() {
++        throw new IllegalStateException("Un dron ATERRIZANDO no puede apagarse: primero debe finalizar el aterrizaje.");
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState despegar() {
++        throw new IllegalStateException("Un dron ATERRIZANDO no puede iniciar un nuevo vuelo hasta finalizar el aterrizaje.");
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState iniciarAterrizaje() {
++        throw new IllegalStateException("El dron ya está aterrizando.");
++    }
++
++    /**
++     * Pasa el dron a EN ESPERA.
++     *
++     * @return estado {@link ReadyState}
++     */
++    @Override
++    public DroneState finalizarAterrizaje() {
++        return new ReadyState();
++    }
++}
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/OffState.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/OffState.java
+new file mode 100644
+index 0000000..85a2319
+--- /dev/null
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/OffState.java
+@@ -0,0 +1,57 @@
++package co.edu.poli.sw2Hexagonal.dominio.state;
++
++/**
++ * Estado APAGADO: el dron no está operativo y únicamente puede encenderse.
++ */
++public class OffState implements DroneState {
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public String getNombre() {
++        return "APAGADO";
++    }
++
++    /**
++     * Pasa el dron a EN ESPERA.
++     *
++     * @return estado {@link ReadyState}
++     */
++    @Override
++    public DroneState encender() {
++        return new ReadyState();
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState apagar() {
++        throw new IllegalStateException("El dron ya está apagado.");
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState despegar() {
++        throw new IllegalStateException("Un dron APAGADO no puede despegar: primero debe encenderse.");
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState iniciarAterrizaje() {
++        throw new IllegalStateException("Un dron APAGADO no puede aterrizar: no está en vuelo.");
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState finalizarAterrizaje() {
++        throw new IllegalStateException("Un dron APAGADO no tiene un aterrizaje en curso.");
++    }
++}
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/ReadyState.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/ReadyState.java
+new file mode 100644
+index 0000000..0b840dc
+--- /dev/null
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/ReadyState.java
+@@ -0,0 +1,60 @@
++package co.edu.poli.sw2Hexagonal.dominio.state;
++
++/**
++ * Estado EN ESPERA: el dron está encendido, en tierra y preparado para
++ * iniciar una operación. Puede despegar o apagarse.
++ */
++public class ReadyState implements DroneState {
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public String getNombre() {
++        return "EN ESPERA";
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState encender() {
++        throw new IllegalStateException("El dron ya está encendido.");
++    }
++
++    /**
++     * Pasa el dron a APAGADO.
++     *
++     * @return estado {@link OffState}
++     */
++    @Override
++    public DroneState apagar() {
++        return new OffState();
++    }
++
++    /**
++     * Pasa el dron a VOLANDO.
++     *
++     * @return estado {@link FlyingState}
++     */
++    @Override
++    public DroneState despegar() {
++        return new FlyingState();
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState iniciarAterrizaje() {
++        throw new IllegalStateException("Un dron EN ESPERA no puede aterrizar: está en tierra.");
++    }
++
++    /**
++     * {@inheritDoc}
++     */
++    @Override
++    public DroneState finalizarAterrizaje() {
++        throw new IllegalStateException("Un dron EN ESPERA no tiene un aterrizaje en curso.");
++    }
++}
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/infraestructura/ui/ControlFormDrone.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/infraestructura/ui/ControlFormDrone.java
+index 8d2dc3c..70b7802 100644
+--- a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/infraestructura/ui/ControlFormDrone.java
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/infraestructura/ui/ControlFormDrone.java
+@@ -4,6 +4,7 @@ import java.io.File;
+ import java.util.ArrayList;
+ import java.util.List;
+ import java.util.Optional;
++import java.util.function.Function;
+ 
+ import co.edu.poli.sw2Hexagonal.aplicacion.observer.ConsoleObserver;
+ import co.edu.poli.sw2Hexagonal.aplicacion.observer.DashboardObserver;
+@@ -14,6 +15,7 @@ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.CrearDroneCasosDeUso;
+ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.EliminarDroneCasosDeUso;
+ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerTodosDroneCasosDeUso;
+ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerUnoDroneCasosDeUso;
++import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.ManageDroneStateUseCase;
+ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.ModificarDroneCasosDeUso;
+ import co.edu.poli.sw2Hexagonal.aplicacion.servicio.DroneOperacionServicio;
+ import co.edu.poli.sw2Hexagonal.aplicacion.servicio.ProgramadorTareas;
+@@ -38,6 +40,7 @@ import co.edu.poli.sw2Hexagonal.infraestructura.weather.GeoApiClient;
+ import co.edu.poli.sw2Hexagonal.infraestructura.weather.OpenWeatherAdapter;
+ import co.edu.poli.sw2Hexagonal.infraestructura.weather.OpenWeatherClient;
+ import javafx.application.Platform;
++import javafx.beans.property.ReadOnlyStringWrapper;
+ import javafx.collections.FXCollections;
+ import javafx.concurrent.Task;
+ import javafx.fxml.FXML;
+@@ -68,7 +71,7 @@ import javafx.util.StringConverter;
+  * Adaptador de entrada: controlador JavaFX del formulario de drones
+  * ({@code formDrone.fxml}).
+  * <p>
+- * La vista tiene cuatro pestañas independientes:
++ * La vista tiene cinco pestañas independientes:
+  * </p>
+  * <ul>
+  *   <li><b>Drones</b>: CRUD de drones y patrón <b>Observer</b>. Permite
+@@ -84,6 +87,8 @@ import javafx.util.StringConverter;
+  *       la estrategia de consumo seleccionada.</li>
+  *   <li><b>Misión</b>: patrón <b>Command</b>. Programa una secuencia de
+  *       tareas para un dron y las ejecuta en el orden registrado.</li>
++ *   <li><b>Estado operativo</b>: patrón <b>State</b>. Muestra el estado del
++ *       dron seleccionado y permite ejecutar sus transiciones.</li>
+  * </ul>
+  * <p>
+  * Las consultas a las APIs se ejecutan en un hilo aparte ({@link Task}) para
+@@ -95,6 +100,7 @@ import javafx.util.StringConverter;
+  * @see WeatherHandler
+  * @see CalcularConsumoCasosDeUso
+  * @see ProgramadorTareas
++ * @see ManageDroneStateUseCase
+  */
+ public class ControlFormDrone {
+ 
+@@ -127,6 +133,8 @@ public class ControlFormDrone {
+     @FXML private TableColumn<Drone, Double> colPeso;
+     /** Columna del tipo. */
+     @FXML private TableColumn<Drone, String> colTipo;
++    /** Columna del estado operativo. */
++    @FXML private TableColumn<Drone, String> colEstado;
+ 
+     // ===== Observer =====
+ 
+@@ -202,6 +210,13 @@ public class ControlFormDrone {
+     /** Muestra los resultados de la misión. */
+     @FXML private TextArea txtResultadosMision;
+ 
++    // ===== State (Estado operativo) =====
++
++    /** Selector del dron cuyo estado se gestiona. */
++    @FXML private ComboBox<Drone> cmbDroneEstado;
++    /** Muestra el estado operativo del dron seleccionado. */
++    @FXML private Label lblEstadoActual;
++
+     // ===== Casos de uso CRUD =====
+ 
+     /** Caso de uso para crear drones. */
+@@ -259,10 +274,15 @@ public class ControlFormDrone {
+     /** Receiver del dron seleccionado para la misión. */
+     private DroneOperacionServicio operacion;
+ 
++    // ===== Estado operativo =====
++
++    /** Caso de uso que gestiona el estado operativo de los drones. */
++    private ManageDroneStateUseCase manageDroneState;
++
+     /**
+      * Inicializa la vista después de cargar el FXML: configura el combo de
+      * tipos, las columnas de la tabla, el listener de selección y las
+-     * pestañas de Observer, consumo energético y misión.
++     * pestañas de Observer, consumo energético, misión y estado operativo.
+      */
+     @FXML
+     private void initialize() {
+@@ -274,6 +294,8 @@ public class ControlFormDrone {
+         colFabricante.setCellValueFactory(new PropertyValueFactory<>("fabricante"));
+         colPeso.setCellValueFactory(new PropertyValueFactory<>("peso"));
+         colTipo.setCellValueFactory(new PropertyValueFactory<>("tipo"));
++        colEstado.setCellValueFactory(fila ->
++                new ReadOnlyStringWrapper(manageDroneState.obtenerEstado(fila.getValue())));
+ 
+         // Al seleccionar una fila, se llena el formulario
+         tblDrones.getSelectionModel().selectedItemProperty().addListener(
+@@ -287,6 +309,7 @@ public class ControlFormDrone {
+         inicializarObserver();
+         inicializarConsumo();
+         inicializarMision();
++        inicializarEstado();
+     }
+ 
+     /**
+@@ -320,6 +343,15 @@ public class ControlFormDrone {
+         this.calcularConsumo = calcularConsumo;
+     }
+ 
++    /**
++     * Inyecta el caso de uso de estados operativos desde {@code App}.
++     *
++     * @param manageDroneState caso de uso del patrón State
++     */
++    public void setManageDroneState(ManageDroneStateUseCase manageDroneState) {
++        this.manageDroneState = manageDroneState;
++    }
++
+     /**
+      * Carga la tabla con los drones registrados. Se llama desde {@code App}
+      * después de inyectar los casos de uso.
+@@ -851,6 +883,105 @@ public class ControlFormDrone {
+         lstTareas.setItems(FXCollections.observableArrayList(textos));
+     }
+ 
++    // ================= State =================
++
++    /**
++     * Configura la pestaña de estado operativo: cómo se muestran los drones
++     * y la actualización del estado al cambiar de dron.
++     */
++    private void inicializarEstado() {
++        cmbDroneEstado.setConverter(crearConverterDrone());
++        cmbDroneEstado.valueProperty().addListener(
++                (obs, anterior, nuevo) -> mostrarEstado(nuevo));
++    }
++
++    /**
++     * Enciende el dron seleccionado.
++     */
++    @FXML
++    private void onEncender() {
++        ejecutarTransicion(manageDroneState::encender);
++    }
++
++    /**
++     * Apaga el dron seleccionado.
++     */
++    @FXML
++    private void onApagar() {
++        ejecutarTransicion(manageDroneState::apagar);
++    }
++
++    /**
++     * Hace despegar el dron seleccionado.
++     */
++    @FXML
++    private void onDespegar() {
++        ejecutarTransicion(manageDroneState::despegar);
++    }
++
++    /**
++     * Inicia el aterrizaje del dron seleccionado.
++     */
++    @FXML
++    private void onIniciarAterrizaje() {
++        ejecutarTransicion(manageDroneState::iniciarAterrizaje);
++    }
++
++    /**
++     * Finaliza el aterrizaje del dron seleccionado.
++     */
++    @FXML
++    private void onFinalizarAterrizaje() {
++        ejecutarTransicion(manageDroneState::finalizarAterrizaje);
++    }
++
++    /**
++     * Aplica una operación al dron seleccionado y actualiza la vista. Si el
++     * estado actual no la permite, muestra el motivo del rechazo.
++     *
++     * @param transicion operación a ejecutar
++     */
++    private void ejecutarTransicion(Function<Drone, String> transicion) {
++        Drone drone = cmbDroneEstado.getValue();
++        if (drone == null) {
++            mostrar(AlertType.WARNING, "Seleccione un dron.");
++            return;
++        }
++        try {
++            transicion.apply(drone);
++            mostrarEstado(drone);
++            tblDrones.refresh();
++        } catch (IllegalStateException e) {
++            mostrar(AlertType.WARNING, e.getMessage());
++        }
++    }
++
++    /**
++     * Muestra el estado operativo de un dron.
++     *
++     * @param drone dron a mostrar, o {@code null} si no hay selección
++     */
++    private void mostrarEstado(Drone drone) {
++        lblEstadoActual.setText(drone == null ? "—" : manageDroneState.obtenerEstado(drone));
++    }
++
++    /**
++     * Mantiene la selección de la pestaña de estado después de recargar los
++     * drones, buscando por id la nueva instancia del dron seleccionado. Si el
++     * dron ya no existe, limpia la selección.
++     *
++     * @param seleccionado dron seleccionado antes de recargar, o {@code null}
++     */
++    private void reseleccionarDroneEstado(Drone seleccionado) {
++        if (seleccionado == null) {
++            return;
++        }
++        cmbDroneEstado.setValue(tblDrones.getItems().stream()
++                .filter(d -> d.getId().equals(seleccionado.getId()))
++                .findFirst()
++                .orElse(null));
++    }
++
+     // ---------- Métodos auxiliares ----------
+ 
+     /**
+@@ -895,14 +1026,19 @@ public class ControlFormDrone {
+ 
+     /**
+      * Recarga la tabla con todos los drones de la base de datos y actualiza
+-     * los selectores de drones de las pestañas de consumo y misión.
++     * los selectores de drones de las pestañas de consumo, misión y estado
++     * operativo.
+      */
+     private void cargarTabla() {
+         try {
+             List<Drone> drones = leerTodosDrone.leerTodos();
++            manageDroneState.sincronizar(drones);
++            Drone seleccionado = cmbDroneEstado.getValue();
+             tblDrones.setItems(FXCollections.observableArrayList(drones));
+             cmbDroneConsumo.setItems(tblDrones.getItems());
+             cmbDroneMision.setItems(tblDrones.getItems());
++            cmbDroneEstado.setItems(tblDrones.getItems());
++            reseleccionarDroneEstado(seleccionado);
+         } catch (Exception e) {
+             mostrar(AlertType.ERROR, e.getMessage());
+         }
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/vista/App.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/vista/App.java
+index 1b3bfeb..f3be9f0 100644
+--- a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/vista/App.java
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/vista/App.java
+@@ -5,8 +5,10 @@ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.CrearDroneCasosDeUso;
+ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.EliminarDroneCasosDeUso;
+ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerTodosDroneCasosDeUso;
+ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerUnoDroneCasosDeUso;
++import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.ManageDroneStateUseCase;
+ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.ModificarDroneCasosDeUso;
+ import co.edu.poli.sw2Hexagonal.aplicacion.servicio.CrearDroneServicio;
++import co.edu.poli.sw2Hexagonal.aplicacion.servicio.DroneStateService;
+ import co.edu.poli.sw2Hexagonal.aplicacion.servicio.EliminarDroneServicio;
+ import co.edu.poli.sw2Hexagonal.aplicacion.servicio.LeerTodosDroneServicio;
+ import co.edu.poli.sw2Hexagonal.aplicacion.servicio.LeerUnoDroneServicio;
+@@ -36,6 +38,8 @@ import javafx.stage.Stage;
+  *                          →  EliminarDroneServicio
+  *   HaversineUtil          →  CalcularConsumoCasosDeUso  →  ControlFormDrone
+  *                             (Context del patrón Strategy)
++ *                             DroneStateService          →  ControlFormDrone
++ *                             (estado operativo, patrón State)
+  * </pre>
+  *
+  * @see ControlFormDrone
+@@ -75,6 +79,9 @@ public class App extends Application {
+         // 3. Crear el Context del patrón Strategy con el cálculo de Haversine
+         CalcularConsumoCasosDeUso consumoUC = new CalcularConsumoCasosDeUso(HaversineUtil::distanciaKm);
+ 
++        // Crear el servicio de estados operativos (patrón State)
++        ManageDroneStateUseCase estadoUC = new DroneStateService();
++
+         // 4. Cargar la vista FXML y obtener el controlador
+         FXMLLoader loader = new FXMLLoader(
+                 getClass().getResource("/co/edu/poli/sw2Hexagonal/vista/formDrone.fxml"));
+@@ -84,6 +91,7 @@ public class App extends Application {
+         ControlFormDrone controlador = loader.getController();
+         controlador.setUseCases(crearUC, leerUnoUC, leerTodosUC, modificarUC, eliminarUC);
+         controlador.setCalcularConsumo(consumoUC);
++        controlador.setManageDroneState(estadoUC);
+         controlador.cargarDrones();
+ 
+         // 6. Mostrar la ventana
+diff --git a/sw2Hexagonal/src/main/resources/co/edu/poli/sw2Hexagonal/vista/formDrone.fxml b/sw2Hexagonal/src/main/resources/co/edu/poli/sw2Hexagonal/vista/formDrone.fxml
+index a566114..0f382e6 100644
+--- a/sw2Hexagonal/src/main/resources/co/edu/poli/sw2Hexagonal/vista/formDrone.fxml
++++ b/sw2Hexagonal/src/main/resources/co/edu/poli/sw2Hexagonal/vista/formDrone.fxml
+@@ -54,6 +54,7 @@
+               <TableColumn fx:id="colFabricante" text="Fabricante" prefWidth="120"/>
+               <TableColumn fx:id="colPeso" text="Peso" prefWidth="70"/>
+               <TableColumn fx:id="colTipo" text="Tipo" prefWidth="110"/>
++              <TableColumn fx:id="colEstado" text="Estado" prefWidth="110"/>
+             </columns>
+           </TableView>
+ 
+@@ -222,5 +223,35 @@
+       </ScrollPane>
+     </Tab>
+ 
++    <!-- ================= Pestaña 5: Estado operativo (State) ================= -->
++    <Tab text="Estado operativo">
++      <ScrollPane fitToWidth="true">
++        <VBox spacing="12">
++          <padding>
++            <Insets top="16" right="16" bottom="16" left="16"/>
++          </padding>
++
++          <HBox spacing="8">
++            <Label text="Dron" minWidth="60"/>
++            <ComboBox fx:id="cmbDroneEstado" prefWidth="320"/>
++          </HBox>
++
++          <HBox spacing="8">
++            <Label text="Estado actual" minWidth="100"/>
++            <Label fx:id="lblEstadoActual" text="—" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
++          </HBox>
++
++          <Label text="Operaciones" style="-fx-font-weight: bold;"/>
++          <HBox spacing="8">
++            <Button text="Encender" onAction="#onEncender"/>
++            <Button text="Apagar" onAction="#onApagar"/>
++            <Button text="Despegar" onAction="#onDespegar"/>
++            <Button text="Iniciar aterrizaje" onAction="#onIniciarAterrizaje"/>
++            <Button text="Finalizar aterrizaje" onAction="#onFinalizarAterrizaje"/>
++          </HBox>
++        </VBox>
++      </ScrollPane>
++    </Tab>
++
+   </TabPane>
+ </VBox>
+\ No newline at end of file

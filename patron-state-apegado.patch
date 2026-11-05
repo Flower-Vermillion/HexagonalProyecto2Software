@@ -1,0 +1,252 @@
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/modelo/DroneContext.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/modelo/DroneContext.java
+index 17ce865..1542118 100644
+--- a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/modelo/DroneContext.java
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/modelo/DroneContext.java
+@@ -24,12 +24,8 @@ public class DroneContext {
+      * Crea el contexto de un dron en estado APAGADO.
+      *
+      * @param drone dron a envolver
+-     * @throws IllegalArgumentException si el dron es nulo
+      */
+     public DroneContext(Drone drone) {
+-        if (drone == null) {
+-            throw new IllegalArgumentException("Debe indicar un dron");
+-        }
+         this.drone = drone;
+         changeState(new OffState());
+     }
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/FlyingState.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/FlyingState.java
+index 9b70540..2ed0709 100644
+--- a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/FlyingState.java
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/FlyingState.java
+@@ -31,7 +31,7 @@ public class FlyingState implements DroneState {
+      */
+     @Override
+     public void encender() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " ya está encendido y en vuelo.");
++        throw new IllegalStateException("El dron ya está encendido y en vuelo.");
+     }
+ 
+     /**
+@@ -39,7 +39,7 @@ public class FlyingState implements DroneState {
+      */
+     @Override
+     public void apagar() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " está VOLANDO y no puede apagarse: primero debe aterrizar.");
++        throw new IllegalStateException("Un dron VOLANDO no puede apagarse: primero debe aterrizar.");
+     }
+ 
+     /**
+@@ -47,7 +47,7 @@ public class FlyingState implements DroneState {
+      */
+     @Override
+     public void despegar() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " ya está en vuelo.");
++        throw new IllegalStateException("El dron ya está en vuelo.");
+     }
+ 
+     /**
+@@ -63,6 +63,6 @@ public class FlyingState implements DroneState {
+      */
+     @Override
+     public void finalizarAterrizaje() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " está VOLANDO: debe iniciar el aterrizaje antes de finalizarlo.");
++        throw new IllegalStateException("Un dron VOLANDO debe iniciar el aterrizaje antes de finalizarlo.");
+     }
+ }
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/LandingState.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/LandingState.java
+index 653d84b..fc03009 100644
+--- a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/LandingState.java
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/LandingState.java
+@@ -32,7 +32,7 @@ public class LandingState implements DroneState {
+      */
+     @Override
+     public void encender() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " ya está encendido y aterrizando.");
++        throw new IllegalStateException("El dron ya está encendido y aterrizando.");
+     }
+ 
+     /**
+@@ -40,7 +40,7 @@ public class LandingState implements DroneState {
+      */
+     @Override
+     public void apagar() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " está ATERRIZANDO y no puede apagarse: primero debe finalizar el aterrizaje.");
++        throw new IllegalStateException("Un dron ATERRIZANDO no puede apagarse: primero debe finalizar el aterrizaje.");
+     }
+ 
+     /**
+@@ -48,7 +48,7 @@ public class LandingState implements DroneState {
+      */
+     @Override
+     public void despegar() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " está ATERRIZANDO y no puede iniciar un nuevo vuelo hasta finalizar el aterrizaje.");
++        throw new IllegalStateException("Un dron ATERRIZANDO no puede iniciar un nuevo vuelo hasta finalizar el aterrizaje.");
+     }
+ 
+     /**
+@@ -56,7 +56,7 @@ public class LandingState implements DroneState {
+      */
+     @Override
+     public void iniciarAterrizaje() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " ya está aterrizando.");
++        throw new IllegalStateException("El dron ya está aterrizando.");
+     }
+ 
+     /**
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/OffState.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/OffState.java
+index 482c9d6..180b3d0 100644
+--- a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/OffState.java
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/OffState.java
+@@ -39,7 +39,7 @@ public class OffState implements DroneState {
+      */
+     @Override
+     public void apagar() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " ya está apagado.");
++        throw new IllegalStateException("El dron ya está apagado.");
+     }
+ 
+     /**
+@@ -47,7 +47,7 @@ public class OffState implements DroneState {
+      */
+     @Override
+     public void despegar() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " está APAGADO y no puede despegar: primero debe encenderse.");
++        throw new IllegalStateException("Un dron APAGADO no puede despegar: primero debe encenderse.");
+     }
+ 
+     /**
+@@ -55,7 +55,7 @@ public class OffState implements DroneState {
+      */
+     @Override
+     public void iniciarAterrizaje() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " está APAGADO y no puede aterrizar: no está en vuelo.");
++        throw new IllegalStateException("Un dron APAGADO no puede aterrizar: no está en vuelo.");
+     }
+ 
+     /**
+@@ -63,6 +63,6 @@ public class OffState implements DroneState {
+      */
+     @Override
+     public void finalizarAterrizaje() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " está APAGADO y no tiene un aterrizaje en curso.");
++        throw new IllegalStateException("Un dron APAGADO no tiene un aterrizaje en curso.");
+     }
+ }
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/ReadyState.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/ReadyState.java
+index 5dc19e5..3aaaf20 100644
+--- a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/ReadyState.java
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/dominio/state/ReadyState.java
+@@ -32,7 +32,7 @@ public class ReadyState implements DroneState {
+      */
+     @Override
+     public void encender() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " ya está encendido.");
++        throw new IllegalStateException("El dron ya está encendido.");
+     }
+ 
+     /**
+@@ -56,7 +56,7 @@ public class ReadyState implements DroneState {
+      */
+     @Override
+     public void iniciarAterrizaje() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " está EN ESPERA y no puede aterrizar: está en tierra.");
++        throw new IllegalStateException("Un dron EN ESPERA no puede aterrizar: está en tierra.");
+     }
+ 
+     /**
+@@ -64,6 +64,6 @@ public class ReadyState implements DroneState {
+      */
+     @Override
+     public void finalizarAterrizaje() {
+-        throw new IllegalStateException("El dron " + context.getDrone().getId() + " está EN ESPERA y no tiene un aterrizaje en curso.");
++        throw new IllegalStateException("Un dron EN ESPERA no tiene un aterrizaje en curso.");
+     }
+ }
+diff --git a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/infraestructura/ui/ControlFormDrone.java b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/infraestructura/ui/ControlFormDrone.java
+index 70b7802..17d26ba 100644
+--- a/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/infraestructura/ui/ControlFormDrone.java
++++ b/sw2Hexagonal/src/main/java/co/edu/poli/sw2Hexagonal/infraestructura/ui/ControlFormDrone.java
+@@ -40,7 +40,6 @@ import co.edu.poli.sw2Hexagonal.infraestructura.weather.GeoApiClient;
+ import co.edu.poli.sw2Hexagonal.infraestructura.weather.OpenWeatherAdapter;
+ import co.edu.poli.sw2Hexagonal.infraestructura.weather.OpenWeatherClient;
+ import javafx.application.Platform;
+-import javafx.beans.property.ReadOnlyStringWrapper;
+ import javafx.collections.FXCollections;
+ import javafx.concurrent.Task;
+ import javafx.fxml.FXML;
+@@ -133,8 +132,6 @@ public class ControlFormDrone {
+     @FXML private TableColumn<Drone, Double> colPeso;
+     /** Columna del tipo. */
+     @FXML private TableColumn<Drone, String> colTipo;
+-    /** Columna del estado operativo. */
+-    @FXML private TableColumn<Drone, String> colEstado;
+ 
+     // ===== Observer =====
+ 
+@@ -294,8 +291,6 @@ public class ControlFormDrone {
+         colFabricante.setCellValueFactory(new PropertyValueFactory<>("fabricante"));
+         colPeso.setCellValueFactory(new PropertyValueFactory<>("peso"));
+         colTipo.setCellValueFactory(new PropertyValueFactory<>("tipo"));
+-        colEstado.setCellValueFactory(fila ->
+-                new ReadOnlyStringWrapper(manageDroneState.obtenerEstado(fila.getValue())));
+ 
+         // Al seleccionar una fila, se llena el formulario
+         tblDrones.getSelectionModel().selectedItemProperty().addListener(
+@@ -950,7 +945,6 @@ public class ControlFormDrone {
+         try {
+             transicion.apply(drone);
+             mostrarEstado(drone);
+-            tblDrones.refresh();
+         } catch (IllegalStateException e) {
+             mostrar(AlertType.WARNING, e.getMessage());
+         }
+@@ -965,23 +959,6 @@ public class ControlFormDrone {
+         lblEstadoActual.setText(drone == null ? "—" : manageDroneState.obtenerEstado(drone));
+     }
+ 
+-    /**
+-     * Mantiene la selección de la pestaña de estado después de recargar los
+-     * drones, buscando por id la nueva instancia del dron seleccionado. Si el
+-     * dron ya no existe, limpia la selección.
+-     *
+-     * @param seleccionado dron seleccionado antes de recargar, o {@code null}
+-     */
+-    private void reseleccionarDroneEstado(Drone seleccionado) {
+-        if (seleccionado == null) {
+-            return;
+-        }
+-        cmbDroneEstado.setValue(tblDrones.getItems().stream()
+-                .filter(d -> d.getId().equals(seleccionado.getId()))
+-                .findFirst()
+-                .orElse(null));
+-    }
+-
+     // ---------- Métodos auxiliares ----------
+ 
+     /**
+@@ -1033,12 +1010,10 @@ public class ControlFormDrone {
+         try {
+             List<Drone> drones = leerTodosDrone.leerTodos();
+             manageDroneState.sincronizar(drones);
+-            Drone seleccionado = cmbDroneEstado.getValue();
+             tblDrones.setItems(FXCollections.observableArrayList(drones));
+             cmbDroneConsumo.setItems(tblDrones.getItems());
+             cmbDroneMision.setItems(tblDrones.getItems());
+             cmbDroneEstado.setItems(tblDrones.getItems());
+-            reseleccionarDroneEstado(seleccionado);
+         } catch (Exception e) {
+             mostrar(AlertType.ERROR, e.getMessage());
+         }
+diff --git a/sw2Hexagonal/src/main/resources/co/edu/poli/sw2Hexagonal/vista/formDrone.fxml b/sw2Hexagonal/src/main/resources/co/edu/poli/sw2Hexagonal/vista/formDrone.fxml
+index 0f382e6..245ead4 100644
+--- a/sw2Hexagonal/src/main/resources/co/edu/poli/sw2Hexagonal/vista/formDrone.fxml
++++ b/sw2Hexagonal/src/main/resources/co/edu/poli/sw2Hexagonal/vista/formDrone.fxml
+@@ -54,7 +54,6 @@
+               <TableColumn fx:id="colFabricante" text="Fabricante" prefWidth="120"/>
+               <TableColumn fx:id="colPeso" text="Peso" prefWidth="70"/>
+               <TableColumn fx:id="colTipo" text="Tipo" prefWidth="110"/>
+-              <TableColumn fx:id="colEstado" text="Estado" prefWidth="110"/>
+             </columns>
+           </TableView>
+ 
