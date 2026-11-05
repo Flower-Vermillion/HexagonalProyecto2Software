@@ -260,5 +260,35 @@
       </ScrollPane>
     </Tab>
 
+    <!-- ================= Pestaña 5: Estado operativo (State) ================= -->
+    <Tab text="Estado operativo">
+      <ScrollPane fitToWidth="true">
+        <VBox spacing="12">
+          <padding>
+            <Insets top="16" right="16" bottom="16" left="16"/>
+          </padding>
+
+          <HBox spacing="8">
+            <Label text="Dron" minWidth="60"/>
+            <ComboBox fx:id="cmbDroneEstado" prefWidth="320"/>
+          </HBox>
+
+          <HBox spacing="8">
+            <Label text="Estado actual" minWidth="100"/>
+            <Label fx:id="lblEstadoActual" text="—" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
+          </HBox>
+
+          <Label text="Operaciones" style="-fx-font-weight: bold;"/>
+          <HBox spacing="8">
+            <Button text="Encender" onAction="#onEncender"/>
+            <Button text="Apagar" onAction="#onApagar"/>
+            <Button text="Despegar" onAction="#onDespegar"/>
+            <Button text="Iniciar aterrizaje" onAction="#onIniciarAterrizaje"/>
+            <Button text="Finalizar aterrizaje" onAction="#onFinalizarAterrizaje"/>
+          </HBox>
+        </VBox>
+      </ScrollPane>
+    </Tab>
+
   </TabPane>
 </VBox>

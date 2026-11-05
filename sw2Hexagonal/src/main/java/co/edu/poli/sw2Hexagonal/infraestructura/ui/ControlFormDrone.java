@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 
 import co.edu.poli.sw2Hexagonal.aplicacion.observer.ConsoleObserver;
 import co.edu.poli.sw2Hexagonal.aplicacion.observer.DashboardObserver;
@@ -15,6 +16,7 @@ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.CrearDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.EliminarDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerTodosDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerUnoDroneCasosDeUso;
+import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.ManageDroneStateUseCase;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.ModificarDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.servicio.DroneOperacionServicio;
 import co.edu.poli.sw2Hexagonal.aplicacion.servicio.ProgramadorTareas;
@@ -69,7 +71,7 @@ import javafx.util.StringConverter;
  * Adaptador de entrada: controlador JavaFX del formulario de drones
  * ({@code formDrone.fxml}).
  * <p>
- * La vista tiene cinco pestañas independientes:
+ * La vista tiene seis pestañas independientes:
  * </p>
  * <ul>
  *   <li><b>Drones</b>: CRUD de drones y patrón <b>Observer</b>. Permite
@@ -89,6 +91,8 @@ import javafx.util.StringConverter;
  *       navegación, sensores, batería y comunicación para iniciar una misión.
  *       El dron se elige de la lista ya cargada; el caso de uso no invoca
  *       operaciones CRUD.</li>
+ *   <li><b>Estado operativo</b>: patrón <b>State</b>. Muestra el estado del
+ *       dron seleccionado y permite ejecutar sus transiciones.</li>
  * </ul>
  * <p>
  * Las consultas a las APIs se ejecutan en un hilo aparte ({@link Task}) para
@@ -101,6 +105,7 @@ import javafx.util.StringConverter;
  * @see CalcularConsumoCasosDeUso
  * @see ProgramadorTareas
  * @see ExecuteMissionCasosDeUso
+ * @see ManageDroneStateUseCase
  */
 public class ControlFormDrone {
 
@@ -223,6 +228,13 @@ public class ControlFormDrone {
     /** Muestra la bitácora del coordinador. */
     @FXML private TextArea txtBitacoraVigilancia;
 
+    // ===== State (Estado operativo) =====
+
+    /** Selector del dron cuyo estado se gestiona. */
+    @FXML private ComboBox<Drone> cmbDroneEstado;
+    /** Muestra el estado operativo del dron seleccionado. */
+    @FXML private Label lblEstadoActual;
+
     // ===== Casos de uso CRUD =====
 
     /** Caso de uso para crear drones. */
@@ -285,10 +297,16 @@ public class ControlFormDrone {
     /** Caso de uso que coordina la operación mediante el patrón Mediator. */
     private ExecuteMissionCasosDeUso executeMission;
 
+    // ===== Estado operativo =====
+
+    /** Caso de uso que gestiona el estado operativo de los drones. */
+    private ManageDroneStateUseCase manageDroneState;
+
     /**
      * Inicializa la vista después de cargar el FXML: configura el combo de
      * tipos, las columnas de la tabla, el listener de selección y las
-     * pestañas de Observer, consumo energético, misión y vigilancia.
+     * pestañas de Observer, consumo energético, misión, vigilancia y estado
+     * operativo.
      */
     @FXML
     private void initialize() {
@@ -314,6 +332,7 @@ public class ControlFormDrone {
         inicializarConsumo();
         inicializarMision();
         cmbDroneVigilancia.setConverter(crearConverterDrone());
+        inicializarEstado();
     }
 
     /**
@@ -354,6 +373,15 @@ public class ControlFormDrone {
      */
     public void setExecuteMission(ExecuteMissionCasosDeUso executeMission) {
         this.executeMission = executeMission;
+    }
+
+    /**
+     * Inyecta el caso de uso de estados operativos desde {@code App}.
+     *
+     * @param manageDroneState caso de uso del patrón State
+     */
+    public void setManageDroneState(ManageDroneStateUseCase manageDroneState) {
+        this.manageDroneState = manageDroneState;
     }
 
     /**
@@ -942,6 +970,87 @@ public class ControlFormDrone {
         }
     }
 
+    // ================= State =================
+
+    /**
+     * Configura la pestaña de estado operativo: cómo se muestran los drones
+     * y la actualización del estado al cambiar de dron.
+     */
+    private void inicializarEstado() {
+        cmbDroneEstado.setConverter(crearConverterDrone());
+        cmbDroneEstado.valueProperty().addListener(
+                (obs, anterior, nuevo) -> mostrarEstado(nuevo));
+    }
+
+    /**
+     * Enciende el dron seleccionado.
+     */
+    @FXML
+    private void onEncender() {
+        ejecutarTransicion(manageDroneState::encender);
+    }
+
+    /**
+     * Apaga el dron seleccionado.
+     */
+    @FXML
+    private void onApagar() {
+        ejecutarTransicion(manageDroneState::apagar);
+    }
+
+    /**
+     * Hace despegar el dron seleccionado.
+     */
+    @FXML
+    private void onDespegar() {
+        ejecutarTransicion(manageDroneState::despegar);
+    }
+
+    /**
+     * Inicia el aterrizaje del dron seleccionado.
+     */
+    @FXML
+    private void onIniciarAterrizaje() {
+        ejecutarTransicion(manageDroneState::iniciarAterrizaje);
+    }
+
+    /**
+     * Finaliza el aterrizaje del dron seleccionado.
+     */
+    @FXML
+    private void onFinalizarAterrizaje() {
+        ejecutarTransicion(manageDroneState::finalizarAterrizaje);
+    }
+
+    /**
+     * Aplica una operación al dron seleccionado y actualiza la vista. Si el
+     * estado actual no la permite, muestra el motivo del rechazo.
+     *
+     * @param transicion operación a ejecutar
+     */
+    private void ejecutarTransicion(Function<Drone, String> transicion) {
+        Drone drone = cmbDroneEstado.getValue();
+        if (drone == null) {
+            mostrar(AlertType.WARNING, "Seleccione un dron.");
+            return;
+        }
+        try {
+            transicion.apply(drone);
+            mostrarEstado(drone);
+        } catch (IllegalStateException e) {
+            mostrar(AlertType.WARNING, e.getMessage());
+        }
+    }
+
+    /**
+     * Muestra el estado operativo de un dron.
+     *
+     * @param drone dron a mostrar, o {@code null} si no hay selección
+     */
+    private void mostrarEstado(Drone drone) {
+        lblEstadoActual.setText(drone == null ? "—" : manageDroneState.obtenerEstado(drone));
+    }
+
     // ---------- Métodos auxiliares ----------
 
     /**
@@ -992,10 +1101,12 @@ public class ControlFormDrone {
     private void cargarTabla() {
         try {
             List<Drone> drones = leerTodosDrone.leerTodos();
+            manageDroneState.sincronizar(drones);
             tblDrones.setItems(FXCollections.observableArrayList(drones));
             cmbDroneConsumo.setItems(tblDrones.getItems());
             cmbDroneMision.setItems(tblDrones.getItems());
             cmbDroneVigilancia.setItems(tblDrones.getItems());
+            cmbDroneEstado.setItems(tblDrones.getItems());
         } catch (Exception e) {
             mostrar(AlertType.ERROR, e.getMessage());
         }
