@@ -1,4 +1,7 @@
+co.edu.poli.sw2Hexagonal.aplicacion.mediator
+co.edu.poli.sw2Hexagonal.aplicacion.mediator.components
 co.edu.poli.sw2Hexagonal.aplicacion.observer
+co.edu.poli.sw2Hexagonal.aplicacion.port.in
 co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada
 co.edu.poli.sw2Hexagonal.aplicacion.puerto.salida
 co.edu.poli.sw2Hexagonal.aplicacion.servicio
@@ -6,6 +9,7 @@ co.edu.poli.sw2Hexagonal.aplicacion.weather
 co.edu.poli.sw2Hexagonal.dominio.modelo
 co.edu.poli.sw2Hexagonal.dominio.modelo.chain
 co.edu.poli.sw2Hexagonal.dominio.modelo.command
+co.edu.poli.sw2Hexagonal.dominio.modelo.state
 co.edu.poli.sw2Hexagonal.dominio.modelo.strategy
 co.edu.poli.sw2Hexagonal.dominio.modelo.weather
 co.edu.poli.sw2Hexagonal.infraestructura.loader

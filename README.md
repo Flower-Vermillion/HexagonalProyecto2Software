@@ -660,6 +660,304 @@ Los valores cambian en cada ejecución porque son simulados.
 
 Si cambias de dron, la secuencia se reinicia, porque los comandos programados apuntan al Receiver del dron anterior.
 
+## Operación de vigilancia: patrón Mediator
+
+Esta sección documenta el patrón **Mediator**, que centraliza la coordinación entre los componentes que intervienen al iniciar una operación de vigilancia con un dron. Los componentes no se comunican entre sí: un coordinador los llama en orden y controla las condiciones necesarias para iniciar la misión.
+
+Esta funcionalidad **no usa las operaciones CRUD de drones**. La interfaz permite elegir un dron de la lista que ya cargó la pestaña Drones, pero el caso de uso del Mediator solo recibe su código y no conoce el repositorio.
+
+El Mediator está en la **capa de aplicación**, porque su responsabilidad es coordinar varios servicios para ejecutar una misión.
+
+---
+
+### Componentes coordinados
+
+| Componente | Clase | Responsabilidad |
+|---|---|---|
+| Sistema de navegación | `NavigationSystem` | Prepara la ruta del dron hacia la zona de vigilancia. |
+| Sistema de batería | `BatterySystem` | Verifica la disponibilidad energética. |
+| Sistema de sensores | `SensorSystem` | Activa los sensores de vigilancia (cámara HD, cámara infrarroja, detector de movimiento). |
+| Sistema de comunicación | `CommunicationSystem` | Establece el enlace con la estación de control. |
+| Coordinador de misión | `MissionCoordinator` | Centraliza y controla la secuencia de ejecución. |
+
+---
+
+### Roles del patrón
+
+| Rol | Clase | Paquete |
+|---|---|---|
+| Mediator (interfaz) | `DroneMediator` | `aplicacion.mediator` |
+| Mediador concreto | `MissionCoordinator` | `aplicacion.mediator` |
+| Componentes | `NavigationSystem`, `BatterySystem`, `SensorSystem`, `CommunicationSystem` | `aplicacion.mediator.components` |
+| Puerto de entrada | `ExecuteMissionCasosDeUso` | `aplicacion.port.in` |
+| Caso de uso | `MissionServicio` | `aplicacion.servicio` |
+| Cliente | `ControlFormDrone` | `infraestructura.ui` |
+
+#### `DroneMediator`
+
+| Método | Descripción |
+|---|---|
+| `iniciarMision(codigoDron, zona, distanciaKm, bateriaDisponible)` | Coordina la secuencia y devuelve `true` si la misión quedó iniciada. |
+| `getBitacora()` | Devuelve el registro de todo lo ocurrido, en orden. |
+
+`MissionCoordinator` es el **único** que tiene referencias a los cuatro componentes. Los componentes son clases independientes: hacen su trabajo y devuelven el resultado, sin ningún atributo que apunte a otro componente. Por eso no pueden comunicarse entre sí, y toda la interacción pasa por el coordinador.
+
+---
+
+### Secuencia de la operación
+
+```
+MissionCoordinator.iniciarMision(...)
+  1. NavigationSystem.prepararRuta()          → ruta preparada
+  2. BatterySystem.esSuficiente()             → ¿alcanza la batería?
+       └─ no → abortar: cancelar ruta
+  3. SensorSystem.activar()                   → sensores activos
+  4. CommunicationSystem.estaEnAlcance()      → ¿hay enlace?
+       └─ no → abortar: desactivar sensores y cancelar ruta
+  ✔ MISIÓN INICIADA
+```
+
+### Condiciones para iniciar la misión
+
+| Condición | Componente | Regla |
+|---|---|---|
+| Batería suficiente | `BatterySystem` | Batería disponible ≥ distancia × 2 (ida y vuelta, 1 % por km) + 20 % de reserva |
+| Enlace de comunicación | `CommunicationSystem` | Distancia a la zona ≤ 15 km |
+
+Si alguna condición falla, el coordinador **aborta** la misión: desactiva los sensores (si ya estaban activos) y cancela la ruta.
+
+---
+
+### Ubicación en la arquitectura hexagonal
+
+```
+aplicacion
+├── port
+│   └── in
+│       └── ExecuteMissionCasosDeUso       (puerto de entrada)
+├── mediator
+│   ├── DroneMediator                      (interfaz Mediator)
+│   ├── MissionCoordinator                 (mediador concreto)
+│   └── components
+│       ├── NavigationSystem
+│       ├── SensorSystem
+│       ├── BatterySystem
+│       └── CommunicationSystem
+└── servicio
+    └── MissionServicio                    (implementa el caso de uso)
+
+infraestructura
+└── ui
+    └── ControlFormDrone                   (pestaña "Operación de vigilancia")
+```
+
+`MissionServicio` valida los datos, crea el coordinador con sus componentes y le pide iniciar la misión. En `App` se inyecta en el controlador:
+
+```java
+ExecuteMissionCasosDeUso missionUC = new MissionServicio();
+controlador.setExecuteMission(missionUC);
+```
+
+---
+
+### Ejemplo de bitácora
+
+Misión iniciada (dron D01, 5 km, 80 % de batería):
+
+```
+[Coordinador] Iniciando operación de vigilancia del dron D01 en 'Parque Simón Bolívar'
+[Navegación] Ruta hacia 'Parque Simón Bolívar' preparada: 5.0 km, 4 puntos de control
+[Batería] Batería suficiente: 80% disponible, 30% requerido (ida y vuelta + 20% de reserva)
+[Sensores] Sensores activados: cámara HD, cámara infrarroja, detector de movimiento
+[Comunicación] Enlace establecido en canal 5.8 GHz (zona a 5.0 km, alcance máximo 15 km)
+[Coordinador] ✔ MISIÓN INICIADA: todos los sistemas listos
+```
+
+Misión abortada por falta de enlace (20 km, 90 % de batería):
+
+```
+[Coordinador] Iniciando operación de vigilancia del dron D01 en 'Zona norte'
+[Navegación] Ruta hacia 'Zona norte' preparada: 20.0 km, 11 puntos de control
+[Batería] Batería suficiente: 90% disponible, 60% requerido (ida y vuelta + 20% de reserva)
+[Sensores] Sensores activados: cámara HD, cámara infrarroja, detector de movimiento
+[Comunicación] Sin enlace: la zona está a 20.0 km y el alcance máximo es 15 km
+[Sensores] Sensores desactivados
+[Navegación] Ruta cancelada
+[Coordinador] ✘ MISIÓN ABORTADA: sin enlace de comunicación
+```
+
+---
+
+### Cómo probarlo en la interfaz
+
+1. Abre la pestaña **Operación de vigilancia**.
+2. Selecciona un dron, escribe la zona, la distancia y la batería disponible.
+3. Presiona **Iniciar operación**.
+4. Se muestra si la misión se inició o se abortó, junto con la bitácora del coordinador.
+
+Casos sugeridos:
+
+| Caso | Distancia | Batería | Resultado esperado |
+|---|---|---|---|
+| Todo bien | 5 km | 80 % | ✔ Iniciada (requiere 30 %, enlace dentro de 15 km) |
+| Batería insuficiente | 10 km | 30 % | ✘ Abortada en batería (requiere 40 %); se cancela la ruta |
+| Fuera de alcance | 20 km | 90 % | ✘ Abortada en comunicación; se desactivan los sensores y se cancela la ruta |
+
+---
+
+### Cómo extenderlo
+
+Para agregar un componente nuevo (por ejemplo, un sistema de cámaras térmicas) basta con crear su clase en `aplicacion.mediator.components` y agregar el paso en `MissionCoordinator`. Ningún otro componente cambia, porque ninguno conoce a los demás.
+
+## Estado operativo: patrón State
+
+Esta sección documenta el patrón **State**, que controla el estado operativo de cada dron. El comportamiento de una operación (encender, apagar, despegar, aterrizar) depende del estado en que esté el dron: una operación permitida cambia el estado, y una no permitida se rechaza con un mensaje que explica el motivo.
+
+Los estados se manejan **en memoria** y no se guardan en la base de datos. Al reiniciar la aplicación, todos los drones vuelven a **APAGADO**.
+
+---
+
+### Estados
+
+| Estado | Clase | Descripción |
+|---|---|---|
+| APAGADO | `OffState` | El dron no está operativo. Es el estado inicial. |
+| EN ESPERA | `ReadyState` | El dron está encendido, en tierra y listo para operar. |
+| VOLANDO | `FlyingState` | El dron está en vuelo. |
+| ATERRIZANDO | `LandingState` | El dron está ejecutando el aterrizaje. |
+
+### Ciclo operativo
+
+```
+  APAGADO ──encender──▶ EN ESPERA ──despegar──▶ VOLANDO
+     ▲                    │    ▲                    │
+     └──────apagar────────┘    │              iniciarAterrizaje
+                               │                    ▼
+                               └──finalizarAterrizaje── ATERRIZANDO
+```
+
+### Transiciones permitidas
+
+| Operación | APAGADO | EN ESPERA | VOLANDO | ATERRIZANDO |
+|---|---|---|---|---|
+| Encender | → EN ESPERA | ✘ | ✘ | ✘ |
+| Apagar | ✘ | → APAGADO | ✘ | ✘ |
+| Despegar | ✘ | → VOLANDO | ✘ | ✘ |
+| Iniciar aterrizaje | ✘ | ✘ | → ATERRIZANDO | ✘ |
+| Finalizar aterrizaje | ✘ | ✘ | ✘ | → EN ESPERA |
+
+Cada ✘ lanza una `IllegalStateException` con el motivo, y el dron **conserva su estado**. Por ejemplo:
+
+- Despegar estando APAGADO: *"Un dron APAGADO no puede despegar: primero debe encenderse."*
+- Apagar estando VOLANDO: *"Un dron VOLANDO no puede apagarse: primero debe aterrizar."*
+- Despegar estando ATERRIZANDO: *"Un dron ATERRIZANDO no puede iniciar un nuevo vuelo hasta finalizar el aterrizaje."*
+
+---
+
+### Roles del patrón
+
+| Rol | Clase | Paquete |
+|---|---|---|
+| State (interfaz) | `DroneState` | `dominio.modelo.state` |
+| Estados concretos | `OffState`, `ReadyState`, `FlyingState`, `LandingState` | `dominio.modelo.state` |
+| Context / Wrapper | `DroneContext` | `dominio.modelo.state` |
+| Caso de uso | `ManageDroneStateCasosDeUso` | `aplicacion.puerto.entrada` |
+| Cliente | `ControlFormDrone` | `infraestructura.ui` |
+
+#### `DroneState` (State)
+
+Declara las operaciones cuyo resultado depende del estado: `encender()`, `apagar()`, `despegar()`, `iniciarAterrizaje()` y `finalizarAterrizaje()`, además de `getNombre()` y `setContext(...)`. Cada estado concreto decide qué operaciones permite y a qué estado pasa el dron.
+
+#### `DroneContext` (Context y Wrapper)
+
+La clase `Drone` no se modifica, así que no puede guardar su propio estado. `DroneContext` **envuelve** un `Drone` (lo recibe en el constructor), mantiene una referencia a su estado actual y le **delega** todas las operaciones:
+
+```java
+public void despegar() {
+    estado.despegar();
+}
+```
+
+Los estados concretos realizan las transiciones llamando a `context.changeState(...)`. Por ejemplo, en `ReadyState`:
+
+```java
+public void despegar() {
+    context.changeState(new FlyingState());
+}
+```
+
+Así, ni el contexto ni el cliente usan `if` o `switch` sobre el estado: cada clase de estado contiene sus propias reglas.
+
+#### `ManageDroneStateCasosDeUso` (caso de uso)
+
+Conserva un `DroneContext` por cada dron, indexado por su `id`, y le delega las operaciones. No contiene reglas de transición. El método `sincronizar(...)` descarta los contextos de drones que ya no existen, para que un dron nuevo creado con el id de uno eliminado empiece en APAGADO.
+
+---
+
+### Ubicación en la arquitectura hexagonal
+
+```
+dominio
+└── modelo
+    ├── Drone                              (no se modificó)
+    └── state
+        ├── DroneState                     (interfaz State)
+        ├── DroneContext                   (Context / Wrapper)
+        ├── OffState
+        ├── ReadyState
+        ├── FlyingState
+        └── LandingState
+
+aplicacion
+└── puerto
+    └── entrada
+        └── ManageDroneStateCasosDeUso     (caso de uso)
+
+infraestructura
+└── ui
+    └── ControlFormDrone                   (pestaña "Estado operativo")
+```
+
+Las reglas de transición son reglas de negocio, por eso los estados y el contexto están en el **dominio**. En `App` se crea el caso de uso y se inyecta en el controlador:
+
+```java
+ManageDroneStateCasosDeUso estadoUC = new ManageDroneStateCasosDeUso();
+controlador.setManageDroneState(estadoUC);
+```
+
+---
+
+### Flujo de una operación
+
+```
+ControlFormDrone.onDespegar()
+  └─ ManageDroneStateCasosDeUso.despegar(drone)
+       └─ DroneContext.despegar()               (busca o crea el contexto del dron)
+            └─ estado.despegar()                (delega en el estado actual)
+                 ├─ ReadyState → context.changeState(new FlyingState())
+                 └─ otro estado → IllegalStateException con el motivo
+```
+
+---
+
+### Cómo probarlo en la interfaz
+
+1. Abre la pestaña **Estado operativo** y selecciona un dron. Su estado inicial es **APAGADO**.
+2. Recorre el ciclo completo: **Encender → Despegar → Iniciar aterrizaje → Finalizar aterrizaje → Apagar**. El estado se actualiza en pantalla después de cada paso.
+3. Prueba operaciones no permitidas para ver los rechazos, por ejemplo:
+   - **Despegar** con el dron APAGADO.
+   - **Apagar** con el dron VOLANDO.
+   - **Despegar** con el dron ATERRIZANDO.
+
+   En cada caso aparece una advertencia con el motivo, y el dron sigue en el mismo estado.
+4. Selecciona otro dron: cada dron tiene su propio estado, independiente de los demás.
+
+---
+
+### Cómo extenderlo
+
+Para agregar un estado nuevo (por ejemplo, **EN MANTENIMIENTO**) basta con crear una clase que implemente `DroneState` y ajustar las transiciones de los estados que lleven a él. `DroneContext`, el caso de uso y la interfaz no cambian.
+
 ## Autor
 
 [Flower-Vermillion](https://github.com/Flower-Vermillion) — Proyecto 2, Software 2.

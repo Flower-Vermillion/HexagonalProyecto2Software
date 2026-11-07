@@ -6,6 +6,7 @@ import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.CrearDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.EliminarDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerTodosDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.LeerUnoDroneCasosDeUso;
+import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.ManageDroneStateCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.puerto.entrada.ModificarDroneCasosDeUso;
 import co.edu.poli.sw2Hexagonal.aplicacion.servicio.CrearDroneServicio;
 import co.edu.poli.sw2Hexagonal.aplicacion.servicio.EliminarDroneServicio;
@@ -83,6 +84,9 @@ public class App extends Application {
         // 4. Crear el caso de uso del patrón Mediator (no usa el repositorio)
         ExecuteMissionCasosDeUso missionUC = new MissionServicio();
 
+        // Crear el caso de uso de estados operativos (patrón State)
+        ManageDroneStateCasosDeUso estadoUC = new ManageDroneStateCasosDeUso();
+
         // 5. Cargar la vista FXML y obtener el controlador
         FXMLLoader loader = new FXMLLoader(
                 getClass().getResource("/co/edu/poli/sw2Hexagonal/vista/formDrone.fxml"));
@@ -93,6 +97,7 @@ public class App extends Application {
         controlador.setUseCases(crearUC, leerUnoUC, leerTodosUC, modificarUC, eliminarUC);
         controlador.setCalcularConsumo(consumoUC);
         controlador.setExecuteMission(missionUC);
+        controlador.setManageDroneState(estadoUC);
         controlador.cargarDrones();
 
         // 7. Mostrar la ventana
